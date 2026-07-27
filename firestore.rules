@@ -1,0 +1,400 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isInitialAllowedUser() {
+      return isAuthenticated()
+        && request.auth.uid == "REPLACE_WITH_ALLOWED_UID";
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated()
+        && request.auth.uid == userId;
+    }
+
+    function canAccessUserData(userId) {
+      return isInitialAllowedUser() && isOwner(userId);
+    }
+
+    function isNotDeleting(data) {
+      return data.get("deleting", false) == false;
+    }
+
+    function isDeleting(data) {
+      return data.get("deleting", false) == true;
+    }
+
+    function isDeletionStart() {
+      return isNotDeleting(resource.data)
+        && isDeleting(request.resource.data)
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(["deleting", "updatedAt"]);
+    }
+
+    function sessionPath(userId, sessionId) {
+      return /databases/$(database)/documents/users/$(userId)/sessions/$(sessionId);
+    }
+
+    function libraryPath(userId, libraryId) {
+      return /databases/$(database)/documents/users/$(userId)/libraries/$(libraryId);
+    }
+
+    function revisionPath(userId, sessionId, version) {
+      let revisionId = [version].join("");
+      return /databases/$(database)/documents/users/$(userId)/sessions/$(sessionId)/revisions/$(revisionId);
+    }
+
+    function hasArchivedAt(data) {
+      return data.keys().hasAny(["archivedAt"]);
+    }
+
+    function isActiveLibraryAfter(userId, libraryId) {
+      return existsAfter(libraryPath(userId, libraryId))
+        && !hasArchivedAt(
+          getAfter(libraryPath(userId, libraryId)).data
+        );
+    }
+
+    function isAllowedSessionLibraryAfter(
+      userId,
+      currentLibraryId,
+      nextLibraryId
+    ) {
+      return existsAfter(libraryPath(userId, nextLibraryId))
+        && (
+          nextLibraryId == currentLibraryId
+          || !hasArchivedAt(
+            getAfter(libraryPath(userId, nextLibraryId)).data
+          )
+        );
+    }
+
+    function isLibraryArchiveStart() {
+      return !hasArchivedAt(resource.data)
+        && hasArchivedAt(request.resource.data)
+        && request.resource.data.archivedAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(["archivedAt", "updatedAt"]);
+    }
+
+    function preservesLibraryArchiveState() {
+      return (
+          !hasArchivedAt(resource.data)
+          && !hasArchivedAt(request.resource.data)
+        )
+        || (
+          hasArchivedAt(resource.data)
+          && hasArchivedAt(request.resource.data)
+          && request.resource.data.archivedAt
+            == resource.data.archivedAt
+        );
+    }
+
+    function isValidScore(value) {
+      return value is int && value >= 0 && value <= 10;
+    }
+
+    function isValidLibrary(data, userId) {
+      return data.keys().hasAll([
+          "userId",
+          "name",
+          "googleMapsUrl",
+          "createdAt",
+          "updatedAt"
+        ])
+        && data.keys().hasOnly([
+          "userId",
+          "name",
+          "googleMapsUrl",
+          "latitude",
+          "longitude",
+          "archivedAt",
+          "createdAt",
+          "updatedAt"
+        ])
+        && data.userId == userId
+        && data.name is string
+        && data.name.size() > 0
+        && data.googleMapsUrl is string
+        && (
+          data.googleMapsUrl == ""
+          || data.googleMapsUrl.matches("^https?://.+")
+        )
+        && data.get("latitude", 0) is number
+        && data.get("latitude", 0) >= -90
+        && data.get("latitude", 0) <= 90
+        && data.get("longitude", 0) is number
+        && data.get("longitude", 0) >= -180
+        && data.get("longitude", 0) <= 180
+        && data.get("archivedAt", request.time) is timestamp
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSession(data, userId) {
+      return data.keys().hasAll([
+          "userId",
+          "libraryId",
+          "enteredAt",
+          "exitedAt",
+          "stayMinutes",
+          "actualWorkMinutes",
+          "concentrationScore",
+          "anxietyScore",
+          "fatigueScore",
+          "selfCriticismMinutes",
+          "plannedTaskCreated",
+          "plannedTaskText",
+          "actualTaskText",
+          "completionStatus",
+          "nextDayReaction",
+          "nextDayNote",
+          "note",
+          "version",
+          "createdAt",
+          "updatedAt"
+        ])
+        && data.keys().hasOnly([
+          "userId",
+          "libraryId",
+          "enteredAt",
+          "exitedAt",
+          "stayMinutes",
+          "actualWorkMinutes",
+          "concentrationScore",
+          "anxietyScore",
+          "fatigueScore",
+          "selfCriticismMinutes",
+          "plannedTaskCreated",
+          "plannedTaskText",
+          "actualTaskText",
+          "completionStatus",
+          "nextDayReaction",
+          "nextDayNote",
+          "note",
+          "version",
+          "deleting",
+          "createdAt",
+          "updatedAt"
+        ])
+        && data.userId == userId
+        && data.libraryId is string
+        && data.libraryId.size() > 0
+        && data.enteredAt is timestamp
+        && data.exitedAt is timestamp
+        && data.exitedAt > data.enteredAt
+        && data.stayMinutes is int
+        && data.stayMinutes > 0
+        && data.actualWorkMinutes is int
+        && data.actualWorkMinutes >= 0
+        && data.actualWorkMinutes <= data.stayMinutes
+        && isValidScore(data.concentrationScore)
+        && isValidScore(data.anxietyScore)
+        && isValidScore(data.fatigueScore)
+        && data.selfCriticismMinutes is int
+        && data.selfCriticismMinutes >= 0
+        && data.selfCriticismMinutes <= data.stayMinutes
+        && data.plannedTaskCreated is bool
+        && data.plannedTaskText is string
+        && data.actualTaskText is string
+        && data.completionStatus in [
+          "on_schedule",
+          "mostly_on_schedule",
+          "off_schedule"
+        ]
+        && data.nextDayReaction in ["pending", "none", "mild", "strong"]
+        && data.nextDayNote is string
+        && data.note is string
+        && data.version is int
+        && data.version >= 1
+        && data.get("deleting", false) is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function hasValidChangedFields(changedFields, before, after) {
+      let declared = changedFields.toSet();
+      let automatic = ["version", "updatedAt"].toSet();
+      let actual = after.diff(before).affectedKeys()
+        .difference(automatic);
+      return changedFields is list
+        && changedFields.size() > 0
+        && changedFields.size() == declared.size()
+        && changedFields.hasOnly([
+          "libraryId",
+          "enteredAt",
+          "exitedAt",
+          "stayMinutes",
+          "actualWorkMinutes",
+          "concentrationScore",
+          "anxietyScore",
+          "fatigueScore",
+          "selfCriticismMinutes",
+          "plannedTaskCreated",
+          "plannedTaskText",
+          "actualTaskText",
+          "completionStatus",
+          "nextDayReaction",
+          "nextDayNote",
+          "note"
+        ])
+        && declared == actual;
+    }
+
+    function isMatchingRevision(
+      revision,
+      before,
+      after,
+      userId,
+      sessionId
+    ) {
+      return revision.keys().hasOnly([
+          "sessionId",
+          "version",
+          "snapshot",
+          "changedAt",
+          "changedFields"
+        ])
+        && revision.sessionId == sessionId
+        && revision.version is int
+        && before.version is int
+        && after.version is int
+        && revision.version == before.version
+        && after.version == before.version + 1
+        && revision.changedAt == request.time
+        && revision.snapshot is map
+        && revision.snapshot == before
+        && revision.snapshot.userId == userId
+        && hasValidChangedFields(
+          revision.changedFields,
+          before,
+          after
+        );
+    }
+
+    function hasMatchingRevisionAfter(userId, sessionId) {
+      let path = revisionPath(
+        userId,
+        sessionId,
+        resource.data.version
+      );
+      return !exists(path)
+        && existsAfter(path)
+        && isMatchingRevision(
+          getAfter(path).data,
+          resource.data,
+          request.resource.data,
+          userId,
+          sessionId
+        );
+    }
+
+    function isValidRevisionCreate(
+      userId,
+      sessionId,
+      revisionId
+    ) {
+      let before = get(sessionPath(userId, sessionId)).data;
+      let after = getAfter(sessionPath(userId, sessionId)).data;
+      return revisionId == [before.version].join("")
+        && isNotDeleting(before)
+        && isNotDeleting(after)
+        && isMatchingRevision(
+          request.resource.data,
+          before,
+          after,
+          userId,
+          sessionId
+        );
+    }
+
+    match /users/{userId}/libraries/{libraryId} {
+      allow read: if canAccessUserData(userId);
+      allow create: if canAccessUserData(userId)
+                    && isValidLibrary(request.resource.data, userId)
+                    && !hasArchivedAt(request.resource.data)
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.updatedAt == request.time;
+      allow update: if canAccessUserData(userId)
+                    && isValidLibrary(request.resource.data, userId)
+                    && request.resource.data.createdAt
+                      == resource.data.createdAt
+                    && (
+                      (
+                        preservesLibraryArchiveState()
+                        && request.resource.data.updatedAt
+                          == request.time
+                      )
+                      || isLibraryArchiveStart()
+                    );
+      allow delete: if false;
+    }
+
+    match /users/{userId}/sessions/{sessionId} {
+      allow read: if canAccessUserData(userId);
+      allow create: if canAccessUserData(userId)
+                    && isValidSession(request.resource.data, userId)
+                    && isNotDeleting(request.resource.data)
+                    && request.resource.data.version == 1
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.updatedAt == request.time
+                    && isActiveLibraryAfter(
+                      userId,
+                      request.resource.data.libraryId
+                    );
+      allow update: if canAccessUserData(userId)
+                    && (
+                      (
+                        isValidSession(request.resource.data, userId)
+                        && isNotDeleting(resource.data)
+                        && isNotDeleting(request.resource.data)
+                        && request.resource.data.userId
+                          == resource.data.userId
+                        && request.resource.data.createdAt
+                          == resource.data.createdAt
+                        && request.resource.data.version
+                          == resource.data.version + 1
+                        && request.resource.data.updatedAt == request.time
+                        && isAllowedSessionLibraryAfter(
+                          userId,
+                          resource.data.libraryId,
+                          request.resource.data.libraryId
+                        )
+                        && hasMatchingRevisionAfter(userId, sessionId)
+                      )
+                      || isDeletionStart()
+                    );
+      allow delete: if canAccessUserData(userId)
+                    && isDeleting(resource.data);
+
+      match /revisions/{revisionId} {
+        allow read: if canAccessUserData(userId)
+                    && exists(sessionPath(userId, sessionId));
+        allow create: if canAccessUserData(userId)
+                      && exists(sessionPath(userId, sessionId))
+                      && existsAfter(sessionPath(userId, sessionId))
+                      && isValidRevisionCreate(
+                        userId,
+                        sessionId,
+                        revisionId
+                      );
+        allow update: if false;
+        allow delete: if canAccessUserData(userId)
+                      && exists(sessionPath(userId, sessionId))
+                      && isDeleting(
+                        get(sessionPath(userId, sessionId)).data
+                      );
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
