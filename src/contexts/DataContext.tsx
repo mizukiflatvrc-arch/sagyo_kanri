@@ -23,7 +23,7 @@ interface DataContextValue {
 const DataContext = createContext<DataContextValue | null>(null);
 
 export function DataProvider({ children }: PropsWithChildren) {
-  const { user, isAllowed } = useAuth();
+  const { user } = useAuth();
   const [allLibraries, setAllLibraries] = useState<Library[]>([]);
   const [sessions, setSessions] = useState<LibrarySession[]>([]);
   const [librariesLoaded, setLibrariesLoaded] = useState(false);
@@ -31,7 +31,7 @@ export function DataProvider({ children }: PropsWithChildren) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user || !isAllowed) return;
+    if (!user) return;
 
     setLibrariesLoaded(false);
     setSessionsLoaded(false);
@@ -64,7 +64,7 @@ export function DataProvider({ children }: PropsWithChildren) {
       stopLibraries();
       stopSessions();
     };
-  }, [isAllowed, user]);
+  }, [user]);
 
   const value = useMemo<DataContextValue>(
     () => {

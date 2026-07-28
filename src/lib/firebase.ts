@@ -26,9 +26,7 @@ export const missingFirebaseEnv = Object.entries(envConfig)
   .filter(([, value]) => !value?.trim())
   .map(([key]) => key);
 
-export const allowedUid = import.meta.env.VITE_ALLOWED_UID?.trim() ?? "";
-export const isFirebaseConfigured =
-  missingFirebaseEnv.length === 0 && allowedUid.length > 0;
+export const isFirebaseConfigured = missingFirebaseEnv.length === 0;
 
 let authInstance: Auth | null = null;
 let dbInstance: Firestore | null = null;

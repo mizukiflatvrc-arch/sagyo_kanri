@@ -26,7 +26,7 @@ export function SetupRequiredPage() {
           <p className="auth-panel__eyebrow">FIRST SETUP</p>
           <h2 id="setup-heading">Firebaseの設定が必要です</h2>
           <p>
-            <code>.env.example</code> を <code>.env.local</code> にコピーし、Firebaseコンソールの値と許可UIDを入力してください。
+            <code>.env.example</code> を <code>.env.local</code> にコピーし、Firebaseコンソールの接続情報を入力してください。
           </p>
           <div className="auth-error" role="status">
             <Settings2 size={16} aria-hidden="true" /> {configurationMessage}
@@ -34,7 +34,7 @@ export function SetupRequiredPage() {
           <div className="auth-disclaimer">
             <ShieldCheck size={17} aria-hidden="true" />
             <span>
-              Firestore Rules内の <code>REPLACE_WITH_ALLOWED_UID</code> も同じUIDへ置き換えてからデプロイします。詳しい手順はREADMEにあります。
+              Firestore Security Rulesをデプロイしてから公開します。詳しい手順はREADMEにあります。
             </span>
           </div>
         </div>

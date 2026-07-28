@@ -6,18 +6,9 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isInitialAllowedUser() {
-      return isAuthenticated()
-        && request.auth.uid == "REPLACE_WITH_ALLOWED_UID";
-    }
-
     function isOwner(userId) {
       return isAuthenticated()
         && request.auth.uid == userId;
-    }
-
-    function canAccessUserData(userId) {
-      return isInitialAllowedUser() && isOwner(userId);
     }
 
     function isNotDeleting(data) {
@@ -315,13 +306,13 @@ service cloud.firestore {
     }
 
     match /users/{userId}/libraries/{libraryId} {
-      allow read: if canAccessUserData(userId);
-      allow create: if canAccessUserData(userId)
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
                     && isValidLibrary(request.resource.data, userId)
                     && !hasArchivedAt(request.resource.data)
                     && request.resource.data.createdAt == request.time
                     && request.resource.data.updatedAt == request.time;
-      allow update: if canAccessUserData(userId)
+      allow update: if isOwner(userId)
                     && isValidLibrary(request.resource.data, userId)
                     && request.resource.data.createdAt
                       == resource.data.createdAt
@@ -337,8 +328,8 @@ service cloud.firestore {
     }
 
     match /users/{userId}/sessions/{sessionId} {
-      allow read: if canAccessUserData(userId);
-      allow create: if canAccessUserData(userId)
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
                     && isValidSession(request.resource.data, userId)
                     && isNotDeleting(request.resource.data)
                     && request.resource.data.version == 1
@@ -348,7 +339,7 @@ service cloud.firestore {
                       userId,
                       request.resource.data.libraryId
                     );
-      allow update: if canAccessUserData(userId)
+      allow update: if isOwner(userId)
                     && (
                       (
                         isValidSession(request.resource.data, userId)
@@ -370,13 +361,13 @@ service cloud.firestore {
                       )
                       || isDeletionStart()
                     );
-      allow delete: if canAccessUserData(userId)
+      allow delete: if isOwner(userId)
                     && isDeleting(resource.data);
 
       match /revisions/{revisionId} {
-        allow read: if canAccessUserData(userId)
+        allow read: if isOwner(userId)
                     && exists(sessionPath(userId, sessionId));
-        allow create: if canAccessUserData(userId)
+        allow create: if isOwner(userId)
                       && exists(sessionPath(userId, sessionId))
                       && existsAfter(sessionPath(userId, sessionId))
                       && isValidRevisionCreate(
@@ -385,7 +376,7 @@ service cloud.firestore {
                         revisionId
                       );
         allow update: if false;
-        allow delete: if canAccessUserData(userId)
+        allow delete: if isOwner(userId)
                       && exists(sessionPath(userId, sessionId))
                       && isDeleting(
                         get(sessionPath(userId, sessionId)).data

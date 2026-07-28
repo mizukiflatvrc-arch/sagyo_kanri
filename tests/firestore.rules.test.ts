@@ -25,10 +25,7 @@ const RULES_SOURCE = readFileSync(
   resolve(process.cwd(), "firestore.rules"),
   "utf8",
 );
-const ALLOWED_UID =
-  RULES_SOURCE.match(/request\.auth\.uid == "([^"]+)"/)?.[1] ??
-  "REPLACE_WITH_ALLOWED_UID";
-const UNLISTED_UID = "unlisted-user";
+const OWNER_UID = "owner-user";
 const OTHER_UID = "other-user";
 
 const TEST_DOCUMENT = {
@@ -193,33 +190,19 @@ describe("Firestore security rules", () => {
 
   it("未認証ユーザーの読み書きを拒否する", async () => {
     const firestore = testEnvironment.unauthenticatedContext().firestore();
-    await seedProtectedDocuments(ALLOWED_UID);
+    await seedProtectedDocuments(OWNER_UID);
 
-    for (const path of protectedDocumentPaths(ALLOWED_UID)) {
+    for (const path of protectedDocumentPaths(OWNER_UID)) {
       const reference = doc(firestore, path);
 
       await assertFails(getDoc(reference));
     }
-    await assertProtectedWritesFail(firestore, ALLOWED_UID);
+    await assertProtectedWritesFail(firestore, OWNER_UID);
   });
 
-  it("許可リストにないユーザーの自分用パスへの読み書きを拒否する", async () => {
+  it("認証済みユーザーでも他人のパスへの読み書きを拒否する", async () => {
     const firestore = testEnvironment
-      .authenticatedContext(UNLISTED_UID)
-      .firestore();
-    await seedProtectedDocuments(UNLISTED_UID);
-
-    for (const path of protectedDocumentPaths(UNLISTED_UID)) {
-      const reference = doc(firestore, path);
-
-      await assertFails(getDoc(reference));
-    }
-    await assertProtectedWritesFail(firestore, UNLISTED_UID);
-  });
-
-  it("許可ユーザーでも他人のパスへの読み書きを拒否する", async () => {
-    const firestore = testEnvironment
-      .authenticatedContext(ALLOWED_UID)
+      .authenticatedContext(OWNER_UID)
       .firestore();
     await seedProtectedDocuments(OTHER_UID);
 
@@ -231,30 +214,30 @@ describe("Firestore security rules", () => {
     await assertProtectedWritesFail(firestore, OTHER_UID);
   });
 
-  it("許可ユーザー本人は libraries、sessions、revisions を利用できる", async () => {
+  it("認証済みの本人は libraries、sessions、revisions を利用できる", async () => {
     const firestore = testEnvironment
-      .authenticatedContext(ALLOWED_UID)
+      .authenticatedContext(OWNER_UID)
       .firestore();
     const libraryReference = doc(
       firestore,
-      `users/${ALLOWED_UID}/libraries/library-1`,
+      `users/${OWNER_UID}/libraries/library-1`,
     );
     const sessionReference = doc(
       firestore,
-      `users/${ALLOWED_UID}/sessions/session-1`,
+      `users/${OWNER_UID}/sessions/session-1`,
     );
     const revisionReference = doc(
       firestore,
-      `users/${ALLOWED_UID}/sessions/session-1/revisions/1`,
+      `users/${OWNER_UID}/sessions/session-1/revisions/1`,
     );
 
     await assertSucceeds(
-      setDoc(libraryReference, validLibraryDocument(ALLOWED_UID)),
+      setDoc(libraryReference, validLibraryDocument(OWNER_UID)),
     );
     await assertSucceeds(getDoc(libraryReference));
 
     await assertSucceeds(
-      setDoc(sessionReference, validSessionDocument(ALLOWED_UID)),
+      setDoc(sessionReference, validSessionDocument(OWNER_UID)),
     );
     await assertSucceeds(getDoc(sessionReference));
     const sessionBeforeUpdate = await getDoc(sessionReference);
@@ -295,7 +278,7 @@ describe("Firestore security rules", () => {
       setDoc(
         doc(
           firestore,
-          `users/${ALLOWED_UID}/sessions/session-1/revisions/2`,
+          `users/${OWNER_UID}/sessions/session-1/revisions/2`,
         ),
         TEST_DOCUMENT,
       ),
@@ -317,22 +300,22 @@ describe("Firestore security rules", () => {
 
   it("deletingにはboolean以外を保存できない", async () => {
     const firestore = testEnvironment
-      .authenticatedContext(ALLOWED_UID)
+      .authenticatedContext(OWNER_UID)
       .firestore();
     const reference = doc(
       firestore,
-      `users/${ALLOWED_UID}/sessions/session-1`,
+      `users/${OWNER_UID}/sessions/session-1`,
     );
     const libraryReference = doc(
       firestore,
-      `users/${ALLOWED_UID}/libraries/library-1`,
+      `users/${OWNER_UID}/libraries/library-1`,
     );
 
     await assertSucceeds(
-      setDoc(libraryReference, validLibraryDocument(ALLOWED_UID)),
+      setDoc(libraryReference, validLibraryDocument(OWNER_UID)),
     );
     await assertSucceeds(
-      setDoc(reference, validSessionDocument(ALLOWED_UID)),
+      setDoc(reference, validSessionDocument(OWNER_UID)),
     );
     await assertFails(
       setDoc(reference, { deleting: "broken" }, { merge: true }),
@@ -341,11 +324,11 @@ describe("Firestore security rules", () => {
 
   it("親セッションがない更新履歴の作成を拒否する", async () => {
     const firestore = testEnvironment
-      .authenticatedContext(ALLOWED_UID)
+      .authenticatedContext(OWNER_UID)
       .firestore();
     const reference = doc(
       firestore,
-      `users/${ALLOWED_UID}/sessions/missing/revisions/revision-1`,
+      `users/${OWNER_UID}/sessions/missing/revisions/revision-1`,
     );
 
     await assertFails(setDoc(reference, TEST_DOCUMENT));
@@ -353,25 +336,25 @@ describe("Firestore security rules", () => {
 
   it("親versionを同時更新しない単独の更新履歴作成を拒否する", async () => {
     const firestore = testEnvironment
-      .authenticatedContext(ALLOWED_UID)
+      .authenticatedContext(OWNER_UID)
       .firestore();
     const sessionReference = doc(
       firestore,
-      `users/${ALLOWED_UID}/sessions/session-1`,
+      `users/${OWNER_UID}/sessions/session-1`,
     );
     const revisionReference = doc(
       firestore,
-      `users/${ALLOWED_UID}/sessions/session-1/revisions/1`,
+      `users/${OWNER_UID}/sessions/session-1/revisions/1`,
     );
     const libraryReference = doc(
       firestore,
-      `users/${ALLOWED_UID}/libraries/library-1`,
+      `users/${OWNER_UID}/libraries/library-1`,
     );
     await assertSucceeds(
-      setDoc(libraryReference, validLibraryDocument(ALLOWED_UID)),
+      setDoc(libraryReference, validLibraryDocument(OWNER_UID)),
     );
     await assertSucceeds(
-      setDoc(sessionReference, validSessionDocument(ALLOWED_UID)),
+      setDoc(sessionReference, validSessionDocument(OWNER_UID)),
     );
     const sessionSnapshot = await getDoc(sessionReference);
 
@@ -389,22 +372,22 @@ describe("Firestore security rules", () => {
 
   it("対応する更新履歴を同じcommitで作らないセッション更新を拒否する", async () => {
     const firestore = testEnvironment
-      .authenticatedContext(ALLOWED_UID)
+      .authenticatedContext(OWNER_UID)
       .firestore();
     const libraryReference = doc(
       firestore,
-      `users/${ALLOWED_UID}/libraries/library-1`,
+      `users/${OWNER_UID}/libraries/library-1`,
     );
     const sessionReference = doc(
       firestore,
-      `users/${ALLOWED_UID}/sessions/session-1`,
+      `users/${OWNER_UID}/sessions/session-1`,
     );
 
     await assertSucceeds(
-      setDoc(libraryReference, validLibraryDocument(ALLOWED_UID)),
+      setDoc(libraryReference, validLibraryDocument(OWNER_UID)),
     );
     await assertSucceeds(
-      setDoc(sessionReference, validSessionDocument(ALLOWED_UID)),
+      setDoc(sessionReference, validSessionDocument(OWNER_UID)),
     );
     await assertFails(
       setDoc(
@@ -421,22 +404,22 @@ describe("Firestore security rules", () => {
 
   it("更新前version由来でないIDや改ざんsnapshotの更新履歴を拒否する", async () => {
     const firestore = testEnvironment
-      .authenticatedContext(ALLOWED_UID)
+      .authenticatedContext(OWNER_UID)
       .firestore();
     const libraryReference = doc(
       firestore,
-      `users/${ALLOWED_UID}/libraries/library-1`,
+      `users/${OWNER_UID}/libraries/library-1`,
     );
     const sessionReference = doc(
       firestore,
-      `users/${ALLOWED_UID}/sessions/session-1`,
+      `users/${OWNER_UID}/sessions/session-1`,
     );
 
     await assertSucceeds(
-      setDoc(libraryReference, validLibraryDocument(ALLOWED_UID)),
+      setDoc(libraryReference, validLibraryDocument(OWNER_UID)),
     );
     await assertSucceeds(
-      setDoc(sessionReference, validSessionDocument(ALLOWED_UID)),
+      setDoc(sessionReference, validSessionDocument(OWNER_UID)),
     );
     const before = (await getDoc(sessionReference)).data() ?? {};
 
@@ -444,7 +427,7 @@ describe("Firestore security rules", () => {
     wrongIdBatch.set(
       doc(
         firestore,
-        `users/${ALLOWED_UID}/sessions/session-1/revisions/random`,
+        `users/${OWNER_UID}/sessions/session-1/revisions/random`,
       ),
       validRevisionDocument("session-1", 1, before),
     );
@@ -459,7 +442,7 @@ describe("Firestore security rules", () => {
     tamperedSnapshotBatch.set(
       doc(
         firestore,
-        `users/${ALLOWED_UID}/sessions/session-1/revisions/1`,
+        `users/${OWNER_UID}/sessions/session-1/revisions/1`,
       ),
       validRevisionDocument("session-1", 1, {
         ...before,
@@ -477,7 +460,7 @@ describe("Firestore security rules", () => {
     wrongFieldsBatch.set(
       doc(
         firestore,
-        `users/${ALLOWED_UID}/sessions/session-1/revisions/1`,
+        `users/${OWNER_UID}/sessions/session-1/revisions/1`,
       ),
       validRevisionDocument(
         "session-1",
@@ -496,29 +479,29 @@ describe("Firestore security rules", () => {
 
   it("アーカイブ済み図書館への新規参照を拒否し既存参照の編集は許可する", async () => {
     const firestore = testEnvironment
-      .authenticatedContext(ALLOWED_UID)
+      .authenticatedContext(OWNER_UID)
       .firestore();
     const firstLibraryReference = doc(
       firestore,
-      `users/${ALLOWED_UID}/libraries/library-1`,
+      `users/${OWNER_UID}/libraries/library-1`,
     );
     const secondLibraryReference = doc(
       firestore,
-      `users/${ALLOWED_UID}/libraries/library-2`,
+      `users/${OWNER_UID}/libraries/library-2`,
     );
     const sessionReference = doc(
       firestore,
-      `users/${ALLOWED_UID}/sessions/session-1`,
+      `users/${OWNER_UID}/sessions/session-1`,
     );
 
     await assertSucceeds(
-      setDoc(firstLibraryReference, validLibraryDocument(ALLOWED_UID)),
+      setDoc(firstLibraryReference, validLibraryDocument(OWNER_UID)),
     );
     await assertSucceeds(
-      setDoc(secondLibraryReference, validLibraryDocument(ALLOWED_UID)),
+      setDoc(secondLibraryReference, validLibraryDocument(OWNER_UID)),
     );
     await assertSucceeds(
-      setDoc(sessionReference, validSessionDocument(ALLOWED_UID)),
+      setDoc(sessionReference, validSessionDocument(OWNER_UID)),
     );
     await assertSucceeds(
       setDoc(
@@ -535,9 +518,9 @@ describe("Firestore security rules", () => {
       setDoc(
         doc(
           firestore,
-          `users/${ALLOWED_UID}/sessions/session-new`,
+          `users/${OWNER_UID}/sessions/session-new`,
         ),
-        validSessionDocument(ALLOWED_UID),
+        validSessionDocument(OWNER_UID),
       ),
     );
 
@@ -547,7 +530,7 @@ describe("Firestore security rules", () => {
     existingEditBatch.set(
       doc(
         firestore,
-        `users/${ALLOWED_UID}/sessions/session-1/revisions/1`,
+        `users/${OWNER_UID}/sessions/session-1/revisions/1`,
       ),
       validRevisionDocument("session-1", 1, beforeExistingEdit),
     );
@@ -574,7 +557,7 @@ describe("Firestore security rules", () => {
     libraryChangeBatch.set(
       doc(
         firestore,
-        `users/${ALLOWED_UID}/sessions/session-1/revisions/2`,
+        `users/${OWNER_UID}/sessions/session-1/revisions/2`,
       ),
       validRevisionDocument(
         "session-1",
@@ -596,24 +579,24 @@ describe("Firestore security rules", () => {
       await setDoc(
         doc(
           context.firestore(),
-          `users/${ALLOWED_UID}/sessions/session-1`,
+          `users/${OWNER_UID}/sessions/session-1`,
         ),
-        validSessionDocument(ALLOWED_UID),
+        validSessionDocument(OWNER_UID),
       );
     });
     const firestore = testEnvironment
-      .authenticatedContext(ALLOWED_UID)
+      .authenticatedContext(OWNER_UID)
       .firestore();
     const sessionReference = doc(
       firestore,
-      `users/${ALLOWED_UID}/sessions/session-1`,
+      `users/${OWNER_UID}/sessions/session-1`,
     );
     const before = (await getDoc(sessionReference)).data() ?? {};
     const batch = writeBatch(firestore);
     batch.set(
       doc(
         firestore,
-        `users/${ALLOWED_UID}/sessions/session-1/revisions/1`,
+        `users/${OWNER_UID}/sessions/session-1/revisions/1`,
       ),
       validRevisionDocument("session-1", 1, before),
     );
@@ -628,21 +611,21 @@ describe("Firestore security rules", () => {
 
   it("図書館のアーカイブは一方向かつ専用更新に限定し物理削除を拒否する", async () => {
     const firestore = testEnvironment
-      .authenticatedContext(ALLOWED_UID)
+      .authenticatedContext(OWNER_UID)
       .firestore();
     const libraryReference = doc(
       firestore,
-      `users/${ALLOWED_UID}/libraries/library-1`,
+      `users/${OWNER_UID}/libraries/library-1`,
     );
 
     await assertFails(
       setDoc(libraryReference, {
-        ...validLibraryDocument(ALLOWED_UID),
+        ...validLibraryDocument(OWNER_UID),
         archivedAt: serverTimestamp(),
       }),
     );
     await assertSucceeds(
-      setDoc(libraryReference, validLibraryDocument(ALLOWED_UID)),
+      setDoc(libraryReference, validLibraryDocument(OWNER_UID)),
     );
     await assertSucceeds(
       setDoc(
@@ -690,26 +673,26 @@ describe("Firestore security rules", () => {
 
   it("所有者フィールドやスコアが不正な文書を拒否する", async () => {
     const firestore = testEnvironment
-      .authenticatedContext(ALLOWED_UID)
+      .authenticatedContext(OWNER_UID)
       .firestore();
     const libraryReference = doc(
       firestore,
-      `users/${ALLOWED_UID}/libraries/library-1`,
+      `users/${OWNER_UID}/libraries/library-1`,
     );
     const sessionReference = doc(
       firestore,
-      `users/${ALLOWED_UID}/sessions/session-1`,
+      `users/${OWNER_UID}/sessions/session-1`,
     );
 
     await assertFails(
       setDoc(libraryReference, validLibraryDocument(OTHER_UID)),
     );
     await assertSucceeds(
-      setDoc(libraryReference, validLibraryDocument(ALLOWED_UID)),
+      setDoc(libraryReference, validLibraryDocument(OWNER_UID)),
     );
     await assertFails(
       setDoc(sessionReference, {
-        ...validSessionDocument(ALLOWED_UID),
+        ...validSessionDocument(OWNER_UID),
         concentrationScore: 11,
       }),
     );
@@ -719,7 +702,7 @@ describe("Firestore security rules", () => {
     const path = "admin/settings";
     await seedDocument(path);
     const firestore = testEnvironment
-      .authenticatedContext(ALLOWED_UID)
+      .authenticatedContext(OWNER_UID)
       .firestore();
     const reference = doc(firestore, path);
 
@@ -728,10 +711,10 @@ describe("Firestore security rules", () => {
   });
 
   it("users 配下でも想定外のサブコレクションへの読み書きを拒否する", async () => {
-    const path = `users/${ALLOWED_UID}/private/settings`;
+    const path = `users/${OWNER_UID}/private/settings`;
     await seedDocument(path);
     const firestore = testEnvironment
-      .authenticatedContext(ALLOWED_UID)
+      .authenticatedContext(OWNER_UID)
       .firestore();
     const reference = doc(firestore, path);
 

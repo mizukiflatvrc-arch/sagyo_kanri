@@ -1,8 +1,8 @@
 # hibi — 図書館作業記録
 
-復学準備中の本人が、図書館での作業時間とその日の状態、翌日の反動を記録するための限定公開Webアプリです。記録と振り返りの補助を目的としており、医療的な診断や復学可否の判定は行いません。
+図書館での作業時間とその日の状態、翌日の反動をユーザーごとに記録するWebアプリです。記録と振り返りの補助を目的としており、医療的な診断や復学可否の判定は行いません。
 
-今回の実装範囲は要件のPhase 1・2です。Googleログイン、許可UID判定、図書館CRUD、作業記録CRUD、翌日の状態の追加入力、入力検証、Firestore Security Rulesまで実装しています。
+今回の実装範囲は要件のPhase 1・2です。Googleログイン、ユーザーごとのデータ分離、図書館CRUD、作業記録CRUD、翌日の状態の追加入力、入力検証、Firestore Security Rulesまで実装しています。
 
 ## 1. 推奨ディレクトリ構成
 
@@ -100,23 +100,20 @@ VITE_FIREBASE_PROJECT_ID=...
 VITE_FIREBASE_STORAGE_BUCKET=...
 VITE_FIREBASE_MESSAGING_SENDER_ID=...
 VITE_FIREBASE_APP_ID=...
-VITE_ALLOWED_UID=...
 VITE_USE_FIREBASE_EMULATORS=false
 ```
 
 `.env.local`はGit管理対象外です。FirebaseのWeb構成値そのものはクライアントへ配信される識別情報ですが、認可は必ずAuthenticationとSecurity Rulesで行います。
 
-許可するUIDがまだ分からない場合は、`VITE_ALLOWED_UID`へ一時的な非空文字列を設定して起動し、Googleログインを一度行います。Firebaseコンソールの「Authentication > Users」に作成されたユーザーのUIDを確認し、正しい値へ置き換えます。
+### 3-4. Security Rulesをデプロイする
 
-### 3-4. Security Rulesの許可UIDを設定する
+`firestore.rules`は、認証済みユーザー本人の`users/{uid}`配下だけを許可します。固定UIDや事前の利用者登録は不要です。Googleログインに成功したユーザーは、その時点から自分専用のデータ領域を利用できます。
 
-`firestore.rules`内の次の文字列を、`VITE_ALLOWED_UID`と同じUIDへ置き換えます。
-
-```text
-REPLACE_WITH_ALLOWED_UID
+```bash
+firebase deploy --only firestore:rules
 ```
 
-置換前のルールは実在しないプレースホルダーUIDだけを許可するため、安全側に失敗します。フロントエンドのUID判定は画面制御用であり、データ保護はFirestore Security Rulesが担います。
+フロントエンドはログイン中ユーザーのUIDを保存先に使いますが、データ保護の最終判断はFirestore Security Rulesが担います。
 
 ## 4. TypeScriptのデータ型
 
@@ -140,25 +137,24 @@ npm run build
 
 このコマンドはstrict TypeScript検査の後に本番バンドルを作成します。
 
-## 5. Authenticationと許可UID判定
+## 5. Authenticationとユーザー分離
 
 `src/contexts/AuthContext.tsx`が次を担当します。
 
 - Googleポップアップログイン
 - 共有端末に認証を残しにくいセッション単位のログイン保持
 - 認証状態の購読
-- `VITE_ALLOWED_UID`との照合
-- 未ログイン、未許可、設定不足の画面分岐
+- 未ログイン、ログイン済み、設定不足の画面分岐
 - ログアウト
 
-許可されていないアカウントはアプリ本体を表示せず、Firestore Rulesでも読み書きを拒否します。
+Googleログイン済みのユーザーは管理者の承認なしで利用を開始できます。アプリは`user.uid`を使って各ユーザー自身のパスだけを購読し、Firestore Rulesでも他人のパスへの読み書きを拒否します。
 
 確認:
 
 1. `npm run dev`で起動します。
 2. 未ログイン時にログイン画面が表示されることを確認します。
-3. 未許可アカウントで「利用できません」と表示されることを確認します。
-4. 許可UIDのアカウントでホームが表示されることを確認します。
+3. 任意のGoogleアカウントでログインし、ホームが表示されることを確認します。
+4. 別のGoogleアカウントでは最初のアカウントの記録が表示されないことを確認します。
 
 ## 6. Firestoreアクセス関数
 
@@ -230,9 +226,8 @@ Firestore処理は画面から分離しています。
 ルールは次を強制します。
 
 - 未認証ユーザーは全拒否
-- 初期許可UID以外は全拒否
-- 許可UIDでも他ユーザーのパスは拒否
-- 許可UID本人の`libraries`、`sessions`、`revisions`だけ許可
+- 認証済みユーザーでも他ユーザーのパスは拒否
+- 認証済み本人の`libraries`、`sessions`、`revisions`だけ許可
 - 保存データのキー、型、値域、Timestampを検証
 - セッション更新と更新前スナップショットの同時書き込みを強制
 - 論理削除済み図書館への新しい参照を拒否
@@ -255,6 +250,8 @@ npm run test:rules
 ```
 
 `test:rules`は実在プロジェクトへ接続せず、`demo-library-work-log-rules`というデモ用プロジェクトIDでローカルFirestore Emulatorだけを起動します。
+
+Rulesテストでは、未認証ユーザー、認証済み本人、他人のパスを検証します。
 
 アプリ全体をEmulator Suiteへ接続する場合は、`.env.local`の
 `VITE_USE_FIREBASE_EMULATORS=true`を設定し、別のターミナルで次を起動します。
@@ -290,9 +287,9 @@ firebase deploy --only firestore:rules,firestore:indexes,hosting
 デプロイ後に確認する項目:
 
 1. Hosting URLでログイン画面が表示される
-2. 許可UIDだけがホームへ進める
+2. 任意のGoogleアカウントでログインしてホームへ進める
 3. 図書館と記録を追加・編集・削除できる
-4. 未許可アカウントがデータを読み書きできない
+4. 別アカウントから他人のデータを読み書きできない
 5. `/sessions/...`を直接開いても404にならずアプリが表示される
 6. `robots.txt`が`Disallow: /`を返す
 
@@ -304,7 +301,7 @@ npm test           # バリデーション等のユニットテスト
 npm run build      # strict型検査 + 本番ビルド
 npm run preview    # distのローカル確認
 npm run test:rules # Firestore Emulatorでルールテスト
-npm run check:deploy # UIDとFirebase環境変数のデプロイ前確認
+npm run check:deploy # Firebase環境変数のデプロイ前確認
 ```
 
 ## MVP外
@@ -316,7 +313,9 @@ npm run check:deploy # UIDとFirebase環境変数のデプロイ前確認
 - グラフ
 - PWA、通知
 - Firebase App Check
-- 複数許可ユーザーを管理する`allowedUsers/{uid}`
+- 利用規約、プライバシーポリシー、問い合わせ先
+- アカウント削除、ユーザー自身による全データ削除
+- 利用量監視、課金アラート
 - Google Maps APIによる検索や地図埋め込み
 
 更新前データの保存構造は実装済みなので、Phase 3で履歴表示を追加できます。

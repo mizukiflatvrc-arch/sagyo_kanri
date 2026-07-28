@@ -5,7 +5,6 @@ import { useAuth } from "./contexts/AuthContext";
 import { FullPageLoading } from "./components/States";
 import { LoginPage } from "./pages/LoginPage";
 import { SetupRequiredPage } from "./pages/SetupRequiredPage";
-import { UnauthorizedPage } from "./pages/UnauthorizedPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { SessionsPage } from "./pages/SessionsPage";
 import { SessionEditorPage } from "./pages/SessionEditorPage";
@@ -16,7 +15,7 @@ import { LibraryEditorPage } from "./pages/LibraryEditorPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
 export function App() {
-  const { user, isLoading, isAllowed, isConfigured } = useAuth();
+  const { user, isLoading, isConfigured } = useAuth();
 
   if (isLoading) {
     return <FullPageLoading label="ログイン状態を確認しています" />;
@@ -27,10 +26,6 @@ export function App() {
   if (!user) {
     return <LoginPage />;
   }
-  if (!isAllowed) {
-    return <UnauthorizedPage />;
-  }
-
   return (
     <DataProvider>
       <Routes>

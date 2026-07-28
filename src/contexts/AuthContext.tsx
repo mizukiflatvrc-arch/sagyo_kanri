@@ -14,7 +14,6 @@ import {
   type PropsWithChildren,
 } from "react";
 import {
-  allowedUid,
   auth,
   authPersistenceReady,
   googleProvider,
@@ -26,7 +25,6 @@ import { toUserMessage } from "../utils/errors";
 interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
-  isAllowed: boolean;
   isConfigured: boolean;
   configurationMessage: string;
   error: string | null;
@@ -106,12 +104,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
     () => ({
       user,
       isLoading,
-      isAllowed: Boolean(user && allowedUid && user.uid === allowedUid),
       isConfigured: isFirebaseConfigured,
       configurationMessage:
         missingFirebaseEnv.length > 0
           ? `.env のFirebase設定（${missingFirebaseEnv.join(", ")}）が不足しています。`
-          : "VITE_ALLOWED_UID が設定されていません。",
+          : "",
       error,
       signIn,
       signOut,

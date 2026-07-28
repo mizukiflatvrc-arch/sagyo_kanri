@@ -9,7 +9,6 @@ const requiredEnvironmentKeys = [
   "VITE_FIREBASE_STORAGE_BUCKET",
   "VITE_FIREBASE_MESSAGING_SENDER_ID",
   "VITE_FIREBASE_APP_ID",
-  "VITE_ALLOWED_UID",
 ];
 
 function readEnvironmentFile() {
@@ -41,19 +40,6 @@ try {
   );
   if (missing.length > 0) {
     throw new Error(`未設定の環境変数があります: ${missing.join(", ")}`);
-  }
-
-  const rules = readFileSync(resolve(workspace, "firestore.rules"), "utf8");
-  const rulesUid = rules.match(/request\.auth\.uid == "([^"]+)"/)?.[1];
-  if (!rulesUid || rulesUid === "REPLACE_WITH_ALLOWED_UID") {
-    throw new Error(
-      "firestore.rules の REPLACE_WITH_ALLOWED_UID を置き換えてください。",
-    );
-  }
-  if (rulesUid !== environment.get("VITE_ALLOWED_UID")) {
-    throw new Error(
-      "firestore.rules と VITE_ALLOWED_UID の値が一致していません。",
-    );
   }
 
   process.stdout.write("デプロイ設定を確認しました。\n");

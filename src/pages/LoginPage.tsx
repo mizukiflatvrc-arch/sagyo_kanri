@@ -37,7 +37,7 @@ export function LoginPage() {
           <p className="auth-panel__eyebrow">PRIVATE ACCESS</p>
           <h2 id="login-heading">記録をひらく</h2>
           <p>
-            現在は限定公開中です。登録済みのGoogleアカウントでログインしてください。
+            Googleアカウントでログインすると、すぐに自分専用の記録を始められます。
           </p>
           {error && (
             <div className="auth-error" role="alert">
