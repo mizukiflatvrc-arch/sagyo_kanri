@@ -11,6 +11,7 @@ import { useAuth } from "./AuthContext";
 import { subscribeLibraries } from "../services/libraries";
 import { subscribeSessions } from "../services/sessions";
 import { toUserMessage } from "../utils/errors";
+import { useEncryption } from "./EncryptionContext";
 
 interface DataContextValue {
   libraries: Library[];
@@ -24,6 +25,7 @@ const DataContext = createContext<DataContextValue | null>(null);
 
 export function DataProvider({ children }: PropsWithChildren) {
   const { user } = useAuth();
+  const { key } = useEncryption();
   const [allLibraries, setAllLibraries] = useState<Library[]>([]);
   const [sessions, setSessions] = useState<LibrarySession[]>([]);
   const [librariesLoaded, setLibrariesLoaded] = useState(false);
@@ -31,7 +33,7 @@ export function DataProvider({ children }: PropsWithChildren) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !key) return;
 
     setLibrariesLoaded(false);
     setSessionsLoaded(false);
@@ -50,6 +52,7 @@ export function DataProvider({ children }: PropsWithChildren) {
     );
     const stopSessions = subscribeSessions(
       user.uid,
+      key,
       (nextSessions) => {
         setSessions(nextSessions);
         setSessionsLoaded(true);
@@ -64,7 +67,7 @@ export function DataProvider({ children }: PropsWithChildren) {
       stopLibraries();
       stopSessions();
     };
-  }, [user]);
+  }, [key, user]);
 
   const value = useMemo<DataContextValue>(
     () => {

@@ -11,11 +11,13 @@ import { updateNextDayReaction } from "../services/sessions";
 import { formatJstDate } from "../utils/date";
 import { formatMinutes } from "../utils/format";
 import { toUserMessage } from "../utils/errors";
+import { useEncryption } from "../contexts/EncryptionContext";
 
 export function NextDayPage() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { key } = useEncryption();
   const { sessions, libraryById, isLoading, error } = useData();
   const { showToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
@@ -40,7 +42,7 @@ export function NextDayPage() {
   }
 
   const handleSubmit = async (values: NextDayReactionFormValues) => {
-    if (!user) return;
+    if (!user || !key) return;
     setIsSaving(true);
     try {
       await updateNextDayReaction(
@@ -48,6 +50,7 @@ export function NextDayPage() {
         session.id,
         values.nextDayReaction,
         values.nextDayNote,
+        key,
         editBase.current?.updatedAt,
       );
       showToast("翌日の様子を保存しました", "success");

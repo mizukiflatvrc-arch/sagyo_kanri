@@ -11,12 +11,14 @@ import { EmptyState, ErrorState, LoadingState } from "../components/States";
 import { createEmptySessionFormValues, sessionToFormValues } from "../utils/format";
 import { createSession, updateSession } from "../services/sessions";
 import { toUserMessage } from "../utils/errors";
+import { useEncryption } from "../contexts/EncryptionContext";
 
 export function SessionEditorPage() {
   const { sessionId } = useParams();
   const isEdit = Boolean(sessionId);
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { key } = useEncryption();
   const { sessions, libraries, libraryById, isLoading, error } = useData();
   const { showToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
@@ -72,7 +74,7 @@ export function SessionEditorPage() {
   }
 
   const handleSubmit = async (values: EditableLibrarySessionFields) => {
-    if (!user) return;
+    if (!user || !key) return;
     setIsSaving(true);
     try {
       if (isEdit && sessionId) {
@@ -80,12 +82,13 @@ export function SessionEditorPage() {
           user.uid,
           sessionId,
           values,
+          key,
           editBase.current?.updatedAt,
         );
         showToast("記録を更新しました", "success");
         navigate(`/sessions/${sessionId}`, { replace: true });
       } else {
-        const newId = await createSession(user.uid, values);
+        const newId = await createSession(user.uid, values, key);
         showToast("記録を保存しました", "success");
         navigate(`/sessions/${newId}`, { replace: true });
       }

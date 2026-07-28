@@ -13,9 +13,12 @@ import { NextDayPage } from "./pages/NextDayPage";
 import { LibrariesPage } from "./pages/LibrariesPage";
 import { LibraryEditorPage } from "./pages/LibraryEditorPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { useEncryption } from "./contexts/EncryptionContext";
+import { EncryptionUnavailablePage } from "./pages/EncryptionUnavailablePage";
 
 export function App() {
   const { user, isLoading, isConfigured } = useAuth();
+  const { status } = useEncryption();
 
   if (isLoading) {
     return <FullPageLoading label="ログイン状態を確認しています" />;
@@ -25,6 +28,12 @@ export function App() {
   }
   if (!user) {
     return <LoginPage />;
+  }
+  if (status === "loading" || status === "idle") {
+    return <FullPageLoading label="暗号化設定を確認しています" />;
+  }
+  if (status === "error") {
+    return <EncryptionUnavailablePage />;
   }
   return (
     <DataProvider>

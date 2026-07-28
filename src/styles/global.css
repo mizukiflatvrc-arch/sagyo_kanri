@@ -1327,6 +1327,23 @@ h3 {
   line-height: 1.55;
 }
 
+.encryption-error-panel {
+  width: min(460px, 100%);
+  min-height: 0;
+  gap: 12px;
+  text-align: center;
+}
+
+.encryption-error-panel > svg {
+  margin: 0 auto 4px;
+  color: var(--forest);
+}
+
+.encryption-error-panel h1,
+.encryption-error-panel p {
+  margin: 0;
+}
+
 .auth-error {
   margin-bottom: 14px;
   padding: 11px 13px;

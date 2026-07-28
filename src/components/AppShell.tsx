@@ -142,7 +142,7 @@ export function AppShell({ children }: AppShellProps) {
 
         <div className="sidebar-footer">
           <p className="privacy-note">
-            記録と振り返りのための個人用ツールです。診断や復学可否の判定は行いません。
+            自由記述は暗号化して保存します。運用権限を持つ管理者は、必要な場合に技術的に復号できます。
           </p>
           <div className="app-sidebar__account account-row">
           {user?.photoURL ? (
