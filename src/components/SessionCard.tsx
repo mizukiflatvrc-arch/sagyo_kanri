@@ -102,6 +102,12 @@ export function SessionCard({
         })}
       </dl>
 
+      {session.isLegacyEncrypted && (
+        <p className="legacy-record-notice">
+          この記録は旧暗号化形式のため、現在のバージョンでは読み込めません
+        </p>
+      )}
+
       <footer className="session-card__statuses">
         <div className="session-card__status">
           <span className="session-card__status-label">翌日</span>

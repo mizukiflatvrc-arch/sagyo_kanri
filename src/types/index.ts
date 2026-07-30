@@ -45,18 +45,21 @@ export interface LibrarySession {
   nextDayNote: string;
   note: string;
 
+  /** Computed locally; legacy text is never exposed through the domain model. */
+  isLegacyEncrypted: boolean;
+
   createdAt: Date;
   updatedAt: Date;
 }
 
 export type CreateLibrarySessionInput = Omit<
   LibrarySession,
-  "id" | "createdAt" | "updatedAt"
+  "id" | "isLegacyEncrypted" | "createdAt" | "updatedAt"
 >;
 
 export type EditableLibrarySessionFields = Omit<
   LibrarySession,
-  "id" | "userId" | "createdAt" | "updatedAt"
+  "id" | "userId" | "isLegacyEncrypted" | "createdAt" | "updatedAt"
 >;
 
 export interface Library {
@@ -82,7 +85,8 @@ export type EditableLibraryFields = Omit<
   "id" | "userId" | "archivedAt" | "createdAt" | "updatedAt"
 >;
 
-export interface StoredSessionSnapshot extends Omit<LibrarySession, "id"> {
+export interface StoredSessionSnapshot
+  extends Omit<LibrarySession, "id" | "isLegacyEncrypted"> {
   version: number;
   deleting: boolean;
 }

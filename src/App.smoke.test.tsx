@@ -25,10 +25,9 @@ describe("App", () => {
   it("Firebase未設定時もクラッシュせず設定案内を表示する", async () => {
     vi.stubEnv("VITE_FIREBASE_API_KEY", "");
     vi.resetModules();
-    const [{ App }, { AuthProvider }, { EncryptionProvider }] = await Promise.all([
+    const [{ App }, { AuthProvider }] = await Promise.all([
       import("./App"),
       import("./contexts/AuthContext"),
-      import("./contexts/EncryptionContext"),
     ]);
 
     container = document.createElement("div");
@@ -42,9 +41,7 @@ describe("App", () => {
         >
           <ToastProvider>
             <AuthProvider>
-              <EncryptionProvider>
-                <App />
-              </EncryptionProvider>
+              <App />
             </AuthProvider>
           </ToastProvider>
         </MemoryRouter>,

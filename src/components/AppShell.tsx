@@ -142,7 +142,8 @@ export function AppShell({ children }: AppShellProps) {
 
         <div className="sidebar-footer">
           <p className="privacy-note">
-            自由記述は暗号化して保存します。運用権限を持つ管理者は、必要な場合に技術的に復号できます。
+            記録はユーザーごとに分離されます。運用権限を持つ管理者は、必要な場合に技術的にアクセスできます。{" "}
+            <a href="/privacy.html">プライバシーについて</a>
           </p>
           <div className="app-sidebar__account account-row">
           {user?.photoURL ? (

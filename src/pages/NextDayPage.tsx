@@ -11,13 +11,12 @@ import { updateNextDayReaction } from "../services/sessions";
 import { formatJstDate } from "../utils/date";
 import { formatMinutes } from "../utils/format";
 import { toUserMessage } from "../utils/errors";
-import { useEncryption } from "../contexts/EncryptionContext";
+import { LEGACY_RECORD_MESSAGE } from "../services/legacyRecords";
 
 export function NextDayPage() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { key } = useEncryption();
   const { sessions, libraryById, isLoading, error } = useData();
   const { showToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
@@ -40,9 +39,25 @@ export function NextDayPage() {
       />
     );
   }
+  if (session.isLegacyEncrypted) {
+    return (
+      <ErrorState
+        title={LEGACY_RECORD_MESSAGE}
+        description="内容を保護するため、翌日の状態を追記・編集できません。"
+        action={
+          <Link
+            className="button button--secondary"
+            to={`/sessions/${session.id}`}
+          >
+            記録詳細へ戻る
+          </Link>
+        }
+      />
+    );
+  }
 
   const handleSubmit = async (values: NextDayReactionFormValues) => {
-    if (!user || !key) return;
+    if (!user) return;
     setIsSaving(true);
     try {
       await updateNextDayReaction(
@@ -50,7 +65,6 @@ export function NextDayPage() {
         session.id,
         values.nextDayReaction,
         values.nextDayNote,
-        key,
         editBase.current?.updatedAt,
       );
       showToast("翌日の様子を保存しました", "success");

@@ -13,6 +13,7 @@ import {
   COMPLETION_STATUSES,
   NEXT_DAY_REACTIONS,
 } from "../types";
+import { isLegacyEncryptedRecord } from "./legacyRecords";
 
 export class InvalidFirestoreDataError extends Error {
   constructor() {
@@ -104,6 +105,7 @@ export function mapSessionDocument(
   snapshot: QueryDocumentSnapshot<DocumentData>,
 ): LibrarySession {
   const data = snapshot.data({ serverTimestamps: "estimate" });
+  const isLegacyEncrypted = isLegacyEncryptedRecord(data);
   return {
     id: snapshot.id,
     userId: stringFrom(data.userId),
@@ -117,12 +119,13 @@ export function mapSessionDocument(
     fatigueScore: finiteNumber(data.fatigueScore),
     selfCriticismMinutes: finiteNumber(data.selfCriticismMinutes),
     plannedTaskCreated: booleanFrom(data.plannedTaskCreated),
-    plannedTaskText: stringFrom(data.plannedTaskText),
-    actualTaskText: stringFrom(data.actualTaskText),
+    plannedTaskText: isLegacyEncrypted ? "" : stringFrom(data.plannedTaskText),
+    actualTaskText: isLegacyEncrypted ? "" : stringFrom(data.actualTaskText),
     completionStatus: completionStatusFrom(data.completionStatus),
     nextDayReaction: nextDayReactionFrom(data.nextDayReaction),
-    nextDayNote: stringFrom(data.nextDayNote),
-    note: stringFrom(data.note),
+    nextDayNote: isLegacyEncrypted ? "" : stringFrom(data.nextDayNote),
+    note: isLegacyEncrypted ? "" : stringFrom(data.note),
+    isLegacyEncrypted,
     createdAt: dateFrom(data.createdAt),
     updatedAt: dateFrom(data.updatedAt),
   };

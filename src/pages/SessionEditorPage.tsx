@@ -11,14 +11,13 @@ import { EmptyState, ErrorState, LoadingState } from "../components/States";
 import { createEmptySessionFormValues, sessionToFormValues } from "../utils/format";
 import { createSession, updateSession } from "../services/sessions";
 import { toUserMessage } from "../utils/errors";
-import { useEncryption } from "../contexts/EncryptionContext";
+import { LEGACY_RECORD_MESSAGE } from "../services/legacyRecords";
 
 export function SessionEditorPage() {
   const { sessionId } = useParams();
   const isEdit = Boolean(sessionId);
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { key } = useEncryption();
   const { sessions, libraries, libraryById, isLoading, error } = useData();
   const { showToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
@@ -51,6 +50,22 @@ export function SessionEditorPage() {
       />
     );
   }
+  if (target?.isLegacyEncrypted) {
+    return (
+      <ErrorState
+        title={LEGACY_RECORD_MESSAGE}
+        description="内容を保護するため、この記録は編集できません。削除する場合は記録詳細へ戻ってください。"
+        action={
+          <Link
+            className="button button--secondary"
+            to={`/sessions/${target.id}`}
+          >
+            記録詳細へ戻る
+          </Link>
+        }
+      />
+    );
+  }
   if (selectableLibraries.length === 0) {
     return (
       <div className="page page--narrow">
@@ -74,7 +89,7 @@ export function SessionEditorPage() {
   }
 
   const handleSubmit = async (values: EditableLibrarySessionFields) => {
-    if (!user || !key) return;
+    if (!user) return;
     setIsSaving(true);
     try {
       if (isEdit && sessionId) {
@@ -82,13 +97,12 @@ export function SessionEditorPage() {
           user.uid,
           sessionId,
           values,
-          key,
           editBase.current?.updatedAt,
         );
         showToast("記録を更新しました", "success");
         navigate(`/sessions/${sessionId}`, { replace: true });
       } else {
-        const newId = await createSession(user.uid, values, key);
+        const newId = await createSession(user.uid, values);
         showToast("記録を保存しました", "success");
         navigate(`/sessions/${newId}`, { replace: true });
       }

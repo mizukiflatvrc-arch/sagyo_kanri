@@ -91,6 +91,11 @@ service cloud.firestore {
       return value is int && value >= 0 && value <= 10;
     }
 
+    function isCurrentText(value) {
+      return value is string
+        && !value.matches("^hibi:e1:.*");
+    }
+
     function isValidLibrary(data, userId) {
       return data.keys().hasAll([
           "userId",
@@ -169,7 +174,6 @@ service cloud.firestore {
           "nextDayReaction",
           "nextDayNote",
           "note",
-          "encryptionVersion",
           "version",
           "deleting",
           "createdAt",
@@ -193,17 +197,16 @@ service cloud.firestore {
         && data.selfCriticismMinutes >= 0
         && data.selfCriticismMinutes <= data.stayMinutes
         && data.plannedTaskCreated is bool
-        && data.plannedTaskText is string
-        && data.actualTaskText is string
+        && isCurrentText(data.plannedTaskText)
+        && isCurrentText(data.actualTaskText)
         && data.completionStatus in [
           "on_schedule",
           "mostly_on_schedule",
           "off_schedule"
         ]
         && data.nextDayReaction in ["pending", "none", "mild", "strong"]
-        && data.nextDayNote is string
-        && data.note is string
-        && data.get("encryptionVersion", 0) is int
+        && isCurrentText(data.nextDayNote)
+        && isCurrentText(data.note)
         && data.version is int
         && data.version >= 1
         && data.get("deleting", false) is bool
@@ -307,43 +310,6 @@ service cloud.firestore {
         );
     }
 
-    function isSessionEncryptionMigration(userId) {
-      let changed = request.resource.data.diff(resource.data).affectedKeys();
-      return isValidSession(request.resource.data, userId)
-        && isNotDeleting(resource.data)
-        && isNotDeleting(request.resource.data)
-        && !resource.data.keys().hasAny(["encryptionVersion"])
-        && request.resource.data.encryptionVersion == 1
-        && changed.hasAll(["encryptionVersion"])
-        && changed.hasOnly([
-          "plannedTaskText",
-          "actualTaskText",
-          "nextDayNote",
-          "note",
-          "encryptionVersion"
-        ]);
-    }
-
-    function isRevisionEncryptionMigration() {
-      let before = resource.data.snapshot;
-      let after = request.resource.data.snapshot;
-      let changed = after.diff(before).affectedKeys();
-      return before is map
-        && after is map
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(["snapshot"])
-        && !before.keys().hasAny(["encryptionVersion"])
-        && after.encryptionVersion == 1
-        && changed.hasAll(["encryptionVersion"])
-        && changed.hasOnly([
-          "plannedTaskText",
-          "actualTaskText",
-          "nextDayNote",
-          "note",
-          "encryptionVersion"
-        ]);
-    }
-
     match /users/{userId}/libraries/{libraryId} {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId)
@@ -370,7 +336,6 @@ service cloud.firestore {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId)
                     && isValidSession(request.resource.data, userId)
-                    && request.resource.data.encryptionVersion == 1
                     && isNotDeleting(request.resource.data)
                     && request.resource.data.version == 1
                     && request.resource.data.createdAt == request.time
@@ -381,10 +346,8 @@ service cloud.firestore {
                     );
       allow update: if isOwner(userId)
                     && (
-                      isSessionEncryptionMigration(userId)
-                      || (
+                      (
                         isValidSession(request.resource.data, userId)
-                        && request.resource.data.encryptionVersion == 1
                         && isNotDeleting(resource.data)
                         && isNotDeleting(request.resource.data)
                         && request.resource.data.userId
@@ -417,9 +380,7 @@ service cloud.firestore {
                         sessionId,
                         revisionId
                       );
-        allow update: if isOwner(userId)
-                      && exists(sessionPath(userId, sessionId))
-                      && isRevisionEncryptionMigration();
+        allow update: if false;
         allow delete: if isOwner(userId)
                       && exists(sessionPath(userId, sessionId))
                       && isDeleting(

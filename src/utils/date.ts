@@ -1,4 +1,5 @@
 const MINUTE_MS = 60_000;
+const DAY_MS = 24 * 60 * MINUTE_MS;
 const JST_OFFSET_MINUTES = 9 * 60;
 const JST_OFFSET_MS = JST_OFFSET_MINUTES * MINUTE_MS;
 
@@ -152,4 +153,35 @@ export function formatJstDate(date: Date): string {
 export function formatJstDateTime(date: Date): string {
   const value = toJstDateTimeLocal(date);
   return value === "" ? "" : `${value.slice(0, 10).replaceAll("-", "/")} ${value.slice(11)}`;
+}
+
+export interface JstDateRange {
+  start: Date;
+  endExclusive: Date;
+}
+
+/**
+ * Builds an inclusive calendar-date range in Japan.
+ *
+ * The returned upper bound is the start of the day after `endDate`, so callers
+ * can use `>= start` and `< endExclusive` without losing records late on the
+ * selected end date.
+ */
+export function createJstDateRange(
+  startDate: string,
+  endDate: string,
+): JstDateRange | null {
+  const start = fromJstDateTimeLocal(`${startDate}T00:00`);
+  const end = fromJstDateTimeLocal(`${endDate}T00:00`);
+
+  if (start === null || end === null || start.getTime() > end.getTime()) {
+    return null;
+  }
+
+  // Japan has no daylight-saving transition, so the next JST midnight is
+  // exactly 24 hours after the selected end-date midnight.
+  return {
+    start,
+    endExclusive: new Date(end.getTime() + DAY_MS),
+  };
 }

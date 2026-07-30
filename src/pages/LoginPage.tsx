@@ -59,6 +59,9 @@ export function LoginPage() {
               このアプリは記録と振り返りを補助するもので、医療的な診断や復学可否を判定するものではありません。
             </span>
           </div>
+          <p className="auth-privacy-link">
+            <a href="/privacy.html">プライバシーについて確認する</a>
+          </p>
         </div>
       </section>
     </main>

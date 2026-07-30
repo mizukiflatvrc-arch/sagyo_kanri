@@ -27,8 +27,6 @@ const RULES_SOURCE = readFileSync(
 );
 const OWNER_UID = "owner-user";
 const OTHER_UID = "other-user";
-const encryptedText = (label: string) =>
-  `hibi:e1:MTIzNDU2Nzg5MDEy:${label}`;
 
 const TEST_DOCUMENT = {
   createdAt: "2026-07-23T00:00:00.000Z",
@@ -58,13 +56,12 @@ function validSessionDocument(userId: string) {
     fatigueScore: 5,
     selfCriticismMinutes: 15,
     plannedTaskCreated: true,
-    plannedTaskText: encryptedText("planned"),
-    actualTaskText: encryptedText("actual"),
+    plannedTaskText: "資料を読む",
+    actualTaskText: "資料を読んだ",
     completionStatus: "mostly_on_schedule",
     nextDayReaction: "pending",
-    nextDayNote: encryptedText("nextday"),
-    note: encryptedText("note"),
-    encryptionVersion: 1,
+    nextDayNote: "",
+    note: "集中できた",
     version: 1,
     deleting: false,
     createdAt: serverTimestamp(),
@@ -254,7 +251,7 @@ describe("Firestore security rules", () => {
       ),
     );
     revisionBatch.update(sessionReference, {
-      note: encryptedText("updated-note"),
+      note: "更新後のメモ",
       version: 2,
       updatedAt: serverTimestamp(),
     });
@@ -325,7 +322,7 @@ describe("Firestore security rules", () => {
     );
   });
 
-  it("新規セッションの自由記述は暗号文だけを許可する", async () => {
+  it("新規セッションの自由記述は平文を許可し旧暗号文を拒否する", async () => {
     const firestore = testEnvironment
       .authenticatedContext(OWNER_UID)
       .firestore();
@@ -337,16 +334,16 @@ describe("Firestore security rules", () => {
     );
     await assertFails(
       setDoc(
-        doc(firestore, `users/${OWNER_UID}/sessions/plaintext`),
+        doc(firestore, `users/${OWNER_UID}/sessions/legacy-ciphertext`),
         {
           ...validSessionDocument(OWNER_UID),
-          plannedTaskText: "平文の予定",
+          plannedTaskText: "hibi:e1:MTIzNDU2Nzg5MDEy:ciphertext",
         },
       ),
     );
   });
 
-  it("既存セッションと履歴は自由記述だけを一度暗号化移行できる", async () => {
+  it("既存の旧暗号化形式は編集を拒否し削除だけを許可する", async () => {
     const firestore = testEnvironment
       .authenticatedContext(OWNER_UID)
       .firestore();
@@ -354,51 +351,55 @@ describe("Firestore security rules", () => {
       firestore,
       `users/${OWNER_UID}/sessions/session-1`,
     );
-    const revisionReference = doc(
-      firestore,
-      `users/${OWNER_UID}/sessions/session-1/revisions/1`,
-    );
-    const { encryptionVersion: _encryptionVersion, ...legacyBase } =
-      validSessionDocument(OWNER_UID);
     const legacy = {
-      ...legacyBase,
-      plannedTaskText: "平文の予定",
-      actualTaskText: "平文の実績",
-      nextDayNote: "",
-      note: "平文のメモ",
+      ...validSessionDocument(OWNER_UID),
+      plannedTaskText: "hibi:e1:MTIzNDU2Nzg5MDEy:planned",
+      actualTaskText: "hibi:e1:MTIzNDU2Nzg5MDEy:actual",
+      nextDayNote: "hibi:e1:MTIzNDU2Nzg5MDEy:nextday",
+      note: "hibi:e1:MTIzNDU2Nzg5MDEy:note",
+      encryptionVersion: 1,
     };
     await testEnvironment.withSecurityRulesDisabled(async (context) => {
-      await setDoc(sessionReference, legacy);
       await setDoc(
-        revisionReference,
-        validRevisionDocument("session-1", 1, legacy),
+        doc(
+          context.firestore(),
+          `users/${OWNER_UID}/libraries/library-1`,
+        ),
+        validLibraryDocument(OWNER_UID),
+      );
+      await setDoc(
+        doc(
+          context.firestore(),
+          `users/${OWNER_UID}/sessions/session-1`,
+        ),
+        legacy,
       );
     });
 
-    const encryptedFields = {
-      plannedTaskText: encryptedText("migrated-planned"),
-      actualTaskText: encryptedText("migrated-actual"),
-      nextDayNote: encryptedText("migrated-next"),
-      note: encryptedText("migrated-note"),
-      encryptionVersion: 1,
-    };
-    await assertSucceeds(
-      setDoc(sessionReference, encryptedFields, { merge: true }),
-    );
-    await assertSucceeds(
-      setDoc(
-        revisionReference,
-        { snapshot: { ...legacy, ...encryptedFields } },
-        { merge: true },
+    const before = (await getDoc(sessionReference)).data() ?? {};
+    const editBatch = writeBatch(firestore);
+    editBatch.set(
+      doc(
+        firestore,
+        `users/${OWNER_UID}/sessions/session-1/revisions/1`,
       ),
+      validRevisionDocument("session-1", 1, before),
     );
-    await assertFails(
+    editBatch.update(sessionReference, {
+      note: "旧暗号文を上書き",
+      version: 2,
+      updatedAt: serverTimestamp(),
+    });
+    await assertFails(editBatch.commit());
+
+    await assertSucceeds(
       setDoc(
         sessionReference,
-        { note: encryptedText("second-direct-change") },
+        { deleting: true, updatedAt: serverTimestamp() },
         { merge: true },
       ),
     );
+    await assertSucceeds(deleteDoc(sessionReference));
   });
 
   it("親セッションがない更新履歴の作成を拒否する", async () => {
@@ -472,7 +473,7 @@ describe("Firestore security rules", () => {
       setDoc(
         sessionReference,
         {
-          note: encryptedText("without-revision"),
+          note: "履歴なしの変更",
           version: 2,
           updatedAt: serverTimestamp(),
         },
@@ -511,7 +512,7 @@ describe("Firestore security rules", () => {
       validRevisionDocument("session-1", 1, before),
     );
     wrongIdBatch.update(sessionReference, {
-      note: encryptedText("update-one"),
+      note: "更新1",
       version: 2,
       updatedAt: serverTimestamp(),
     });
@@ -525,11 +526,11 @@ describe("Firestore security rules", () => {
       ),
       validRevisionDocument("session-1", 1, {
         ...before,
-        note: encryptedText("tampered-snapshot"),
+        note: "snapshotを改ざん",
       }),
     );
     tamperedSnapshotBatch.update(sessionReference, {
-      note: encryptedText("update-two"),
+      note: "更新2",
       version: 2,
       updatedAt: serverTimestamp(),
     });
@@ -549,7 +550,7 @@ describe("Firestore security rules", () => {
       ),
     );
     wrongFieldsBatch.update(sessionReference, {
-      note: encryptedText("update-three"),
+      note: "更新3",
       version: 2,
       updatedAt: serverTimestamp(),
     });
@@ -614,7 +615,7 @@ describe("Firestore security rules", () => {
       validRevisionDocument("session-1", 1, beforeExistingEdit),
     );
     existingEditBatch.update(sessionReference, {
-      note: encryptedText("archived-library-edit"),
+      note: "過去の記録は編集できる",
       version: 2,
       updatedAt: serverTimestamp(),
     });
@@ -680,7 +681,7 @@ describe("Firestore security rules", () => {
       validRevisionDocument("session-1", 1, before),
     );
     batch.update(sessionReference, {
-      note: encryptedText("missing-library-edit"),
+      note: "参照切れのまま編集",
       version: 2,
       updatedAt: serverTimestamp(),
     });

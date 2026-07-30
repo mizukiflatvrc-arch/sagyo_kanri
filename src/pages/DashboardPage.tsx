@@ -29,7 +29,8 @@ export function DashboardPage() {
   }
 
   const pending = sessions.filter(
-    (session) => session.nextDayReaction === "pending",
+    (session) =>
+      !session.isLegacyEncrypted && session.nextDayReaction === "pending",
   );
   const since = Date.now() - 30 * 24 * 60 * 60 * 1_000;
   const recentPeriod = sessions.filter(

@@ -26,6 +26,7 @@ import {
   formatMinutes,
 } from "../utils/format";
 import { toUserMessage } from "../utils/errors";
+import { LEGACY_RECORD_MESSAGE } from "../services/legacyRecords";
 
 function textOrDash(value: string): string {
   return value.trim() || "—";
@@ -73,6 +74,46 @@ export function SessionDetailPage() {
       setConfirmOpen(false);
     }
   };
+
+  if (session.isLegacyEncrypted) {
+    return (
+      <div className="page">
+        <PageHeader
+          eyebrow={formatJstDate(session.enteredAt)}
+          title="旧暗号化形式の記録"
+          backTo="/sessions"
+          backLabel="記録一覧"
+          actions={
+            <button
+              className="button button--danger"
+              type="button"
+              onClick={() => setConfirmOpen(true)}
+            >
+              <Trash2 size={17} /> 削除
+            </button>
+          }
+        />
+        <ErrorState
+          title={LEGACY_RECORD_MESSAGE}
+          description="暗号文は表示せず、編集や翌日の追記も行いません。この記録に対して実行できる変更は削除だけです。"
+          action={
+            <Link className="button button--secondary" to="/sessions">
+              記録一覧へ戻る
+            </Link>
+          }
+        />
+        <ConfirmDialog
+          open={confirmOpen}
+          title="この記録を削除しますか？"
+          description="削除後は元に戻せません。保存されている更新前データも削除されます。"
+          confirmLabel="削除する"
+          isPending={isDeleting}
+          onConfirm={handleDelete}
+          onClose={() => setConfirmOpen(false)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="page">

@@ -1327,21 +1327,10 @@ h3 {
   line-height: 1.55;
 }
 
-.encryption-error-panel {
-  width: min(460px, 100%);
-  min-height: 0;
-  gap: 12px;
+.auth-privacy-link {
+  margin: 14px 0 0;
+  font-size: 0.78rem;
   text-align: center;
-}
-
-.encryption-error-panel > svg {
-  margin: 0 auto 4px;
-  color: var(--forest);
-}
-
-.encryption-error-panel h1,
-.encryption-error-panel p {
-  margin: 0;
 }
 
 .auth-error {
@@ -2023,6 +2012,17 @@ svg.state__icon {
   display: grid;
   justify-items: end;
   gap: 6px;
+}
+
+.legacy-record-notice {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 9px;
+  color: #743f3b;
+  background: var(--rose-soft);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 .session-card__status {

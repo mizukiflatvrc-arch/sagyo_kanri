@@ -205,6 +205,7 @@ describe("duration formatting and form mapping", () => {
       nextDayReaction: "mild",
       nextDayNote: "",
       note: "",
+      isLegacyEncrypted: false,
       createdAt: new Date("2026-07-23T03:00:00.000Z"),
       updatedAt: new Date("2026-07-23T03:00:00.000Z"),
     };
