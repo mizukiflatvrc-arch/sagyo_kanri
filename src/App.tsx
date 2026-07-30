@@ -13,6 +13,7 @@ import { NextDayPage } from "./pages/NextDayPage";
 import { LibrariesPage } from "./pages/LibrariesPage";
 import { LibraryEditorPage } from "./pages/LibraryEditorPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { ExportPage } from "./pages/ExportPage";
 
 export function App() {
   const { user, isLoading, isConfigured } = useAuth();
@@ -43,6 +44,7 @@ export function App() {
             element={<NextDayPage />}
           />
           <Route path="libraries" element={<LibrariesPage />} />
+          <Route path="export" element={<ExportPage />} />
           <Route path="libraries/new" element={<LibraryEditorPage />} />
           <Route
             path="libraries/:libraryId/edit"

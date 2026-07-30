@@ -1,4 +1,8 @@
-import { toJstDateTimeLocal } from "./date";
+import {
+  jstDateKeysInRange,
+  toJstDateKey,
+  toJstDateTimeLocal,
+} from "./date";
 
 export const EXPORT_TABLE_HEADERS = [
   "作業日",
@@ -33,6 +37,11 @@ export interface ExportTableRow {
   anxietyScore: string;
   fatigueScore: string;
   selfCriticismDuration: string;
+}
+
+export interface ExportPeriod {
+  startDate: string;
+  endDate: string;
 }
 
 function formatJstPart(
@@ -78,24 +87,65 @@ function enteredAtMillis(session: ExportSessionRecord): number {
   return Number.isFinite(value) ? value : Number.POSITIVE_INFINITY;
 }
 
+function tableRowFromSession(session: ExportSessionRecord): ExportTableRow {
+  return {
+    workDate: formatExportJstDate(session.enteredAt),
+    enteredTime: formatExportJstTime(session.enteredAt),
+    exitedTime: formatExportJstTime(session.exitedAt),
+    stayDuration: formatMinutesAsClock(session.stayMinutes),
+    actualWorkDuration: formatMinutesAsClock(session.actualWorkMinutes),
+    concentrationScore: formatScore(session.concentrationScore),
+    anxietyScore: formatScore(session.anxietyScore),
+    fatigueScore: formatScore(session.fatigueScore),
+    selfCriticismDuration: formatMinutesAsClock(
+      session.selfCriticismMinutes,
+    ),
+  };
+}
+
+function emptyTableRow(dateKey: string): ExportTableRow {
+  const emptyValue = "---";
+  return {
+    workDate: dateKey.slice(5).replace("-", "/"),
+    enteredTime: emptyValue,
+    exitedTime: emptyValue,
+    stayDuration: emptyValue,
+    actualWorkDuration: emptyValue,
+    concentrationScore: emptyValue,
+    anxietyScore: emptyValue,
+    fatigueScore: emptyValue,
+    selfCriticismDuration: emptyValue,
+  };
+}
+
 export function createExportTableRows(
   sessions: readonly ExportSessionRecord[],
+  period?: ExportPeriod,
 ): ExportTableRow[] {
-  return [...sessions]
-    .sort((left, right) => enteredAtMillis(left) - enteredAtMillis(right))
-    .map((session) => ({
-      workDate: formatExportJstDate(session.enteredAt),
-      enteredTime: formatExportJstTime(session.enteredAt),
-      exitedTime: formatExportJstTime(session.exitedAt),
-      stayDuration: formatMinutesAsClock(session.stayMinutes),
-      actualWorkDuration: formatMinutesAsClock(session.actualWorkMinutes),
-      concentrationScore: formatScore(session.concentrationScore),
-      anxietyScore: formatScore(session.anxietyScore),
-      fatigueScore: formatScore(session.fatigueScore),
-      selfCriticismDuration: formatMinutesAsClock(
-        session.selfCriticismMinutes,
-      ),
-    }));
+  const sortedSessions = [...sessions].sort(
+    (left, right) => enteredAtMillis(left) - enteredAtMillis(right),
+  );
+  if (period === undefined) {
+    return sortedSessions.map(tableRowFromSession);
+  }
+
+  const sessionsByDate = new Map<string, ExportSessionRecord[]>();
+  sortedSessions.forEach((session) => {
+    const dateKey = toJstDateKey(session.enteredAt);
+    if (dateKey === "") return;
+    const records = sessionsByDate.get(dateKey) ?? [];
+    records.push(session);
+    sessionsByDate.set(dateKey, records);
+  });
+
+  return jstDateKeysInRange(period.startDate, period.endDate).flatMap(
+    (dateKey) => {
+      const records = sessionsByDate.get(dateKey);
+      return records && records.length > 0
+        ? records.map(tableRowFromSession)
+        : [emptyTableRow(dateKey)];
+    },
+  );
 }
 
 function rowValues(row: ExportTableRow): string[] {
@@ -114,8 +164,9 @@ function rowValues(row: ExportTableRow): string[] {
 
 export function generateSessionsMarkdown(
   sessions: readonly ExportSessionRecord[],
+  period?: ExportPeriod,
 ): string {
-  const rows = createExportTableRows(sessions);
+  const rows = createExportTableRows(sessions, period);
   if (rows.length === 0) return "";
 
   const header = `| ${EXPORT_TABLE_HEADERS.join(" | ")} |`;

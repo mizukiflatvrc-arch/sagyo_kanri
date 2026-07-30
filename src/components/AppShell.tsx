@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
   BookOpenText,
+  FileDown,
   History,
   House,
   LibraryBig,
@@ -36,12 +37,14 @@ const desktopNavigationItems: NavigationItem[] = [
       pathname.startsWith("/sessions") && pathname !== "/sessions/new",
   },
   { to: "/libraries", label: "図書館", icon: LibraryBig },
+  { to: "/export", label: "エクスポート", icon: FileDown, end: true },
 ];
 
 const mobileNavigationItems: NavigationItem[] = [
   { to: "/", label: "ホーム", icon: House, end: true },
   { to: "/sessions", label: "記録一覧", icon: History },
   { to: "/libraries", label: "図書館", icon: LibraryBig },
+  { to: "/export", label: "出力", icon: FileDown, end: true },
 ];
 
 function titleForPath(pathname: string): string {
@@ -54,6 +57,7 @@ function titleForPath(pathname: string): string {
   if (pathname.endsWith("/next-day")) return "翌日の様子を記録";
   if (pathname.startsWith("/sessions/")) return "記録詳細";
   if (pathname === "/libraries") return "図書館";
+  if (pathname === "/export") return "記録をエクスポート";
   if (pathname === "/libraries/new") return "図書館を登録";
   if (pathname.endsWith("/edit") && pathname.startsWith("/libraries/")) {
     return "図書館を編集";

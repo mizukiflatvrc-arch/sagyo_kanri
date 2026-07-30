@@ -185,3 +185,22 @@ export function createJstDateRange(
     endExclusive: new Date(end.getTime() + DAY_MS),
   };
 }
+
+/** Returns every JST calendar-date key in an inclusive date range. */
+export function jstDateKeysInRange(
+  startDate: string,
+  endDate: string,
+): string[] {
+  const range = createJstDateRange(startDate, endDate);
+  if (range === null) return [];
+
+  const keys: string[] = [];
+  for (
+    let instant = range.start.getTime();
+    instant < range.endExclusive.getTime();
+    instant += DAY_MS
+  ) {
+    keys.push(toJstDateKey(new Date(instant)));
+  }
+  return keys;
+}
