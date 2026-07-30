@@ -87,7 +87,7 @@ describe("ExportPage", () => {
     });
   });
 
-  it("0件の場合は指定メッセージを表示する", async () => {
+  it("0件の場合も期間内の日付を表として表示する", async () => {
     getSessionsForExportMock.mockResolvedValueOnce([]);
 
     await act(async () => {
@@ -97,8 +97,28 @@ describe("ExportPage", () => {
 
     expect(container.textContent).toContain("対象件数: 0件");
     expect(container.textContent).toContain("指定した期間に記録はありません");
-    expect(buttonByText(container, "Markdownをコピー").disabled).toBe(true);
-    expect(buttonByText(container, "印刷・PDF保存").disabled).toBe(true);
+    expect(container.querySelector(".export-data-table--preview")).not.toBeNull();
+    expect(container.textContent).toContain("---");
+    expect(buttonByText(container, "Markdownをコピー").disabled).toBe(false);
+    expect(buttonByText(container, "印刷・PDF保存").disabled).toBe(false);
+  });
+
+  it("Markdown記法ではなく整形済みの表をプレビューする", async () => {
+    getSessionsForExportMock.mockResolvedValueOnce([RECORD]);
+
+    await act(async () => {
+      buttonByText(container, "プレビューを生成").click();
+      await Promise.resolve();
+    });
+
+    const table = container.querySelector<HTMLTableElement>(
+      ".export-data-table--preview",
+    );
+    expect(table).not.toBeNull();
+    expect(table?.querySelector("th")?.textContent).toBe("作業日");
+    expect(table?.textContent).toContain("07/28");
+    expect(table?.textContent).toContain("10:15");
+    expect(container.querySelector(".export-copy-fallback")).toBeNull();
   });
 
   it("コピー成功を表示する", async () => {
@@ -136,10 +156,7 @@ describe("ExportPage", () => {
       buttonByText(container, "プレビューを生成").click();
       await Promise.resolve();
     });
-    const preview = container.querySelector<HTMLTextAreaElement>(
-      ".export-markdown-preview",
-    );
-    const select = vi.spyOn(preview!, "select");
+    const select = vi.spyOn(HTMLTextAreaElement.prototype, "select");
 
     await act(async () => {
       buttonByText(container, "Markdownをコピー").click();
@@ -147,8 +164,9 @@ describe("ExportPage", () => {
     });
 
     expect(select).toHaveBeenCalledOnce();
+    expect(container.querySelector(".export-copy-fallback textarea")).not.toBeNull();
     expect(container.textContent).toContain(
-      "選択されたプレビューを手動でコピーしてください",
+      "表示されたMarkdownを手動でコピーしてください",
     );
   });
 });

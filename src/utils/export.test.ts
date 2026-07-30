@@ -5,6 +5,7 @@ import {
   formatExportJstDate,
   formatExportJstTime,
   formatMinutesAsClock,
+  createExportTableRows,
   generateSessionsMarkdown,
   type ExportSessionRecord,
 } from "./export";
@@ -96,6 +97,61 @@ describe("generateSessionsMarkdown", () => {
 
     expect(dataLines[0]).toContain("| 07/01 |");
     expect(dataLines[1]).toContain("| 07/03 |");
+  });
+
+  it("指定期間の未登録日を---で補完する", () => {
+    const rows = createExportTableRows(
+      [session("2026-07-02T01:00:00.000Z")],
+      { startDate: "2026-07-01", endDate: "2026-07-03" },
+    );
+
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toEqual({
+      workDate: "07/01",
+      enteredTime: "---",
+      exitedTime: "---",
+      stayDuration: "---",
+      actualWorkDuration: "---",
+      concentrationScore: "---",
+      anxietyScore: "---",
+      fatigueScore: "---",
+      selfCriticismDuration: "---",
+    });
+    expect(rows[1]?.workDate).toBe("07/02");
+    expect(rows[1]?.enteredTime).toBe("10:00");
+    expect(rows[2]?.workDate).toBe("07/03");
+    expect(rows[2]?.enteredTime).toBe("---");
+  });
+
+  it("同じ日に複数記録がある場合はすべての行を残す", () => {
+    const rows = createExportTableRows(
+      [
+        session("2026-07-02T04:00:00.000Z"),
+        session("2026-07-02T01:00:00.000Z"),
+      ],
+      { startDate: "2026-07-01", endDate: "2026-07-03" },
+    );
+
+    expect(rows.map((row) => row.workDate)).toEqual([
+      "07/01",
+      "07/02",
+      "07/02",
+      "07/03",
+    ]);
+    expect(rows[1]?.enteredTime).toBe("10:00");
+    expect(rows[2]?.enteredTime).toBe("13:00");
+  });
+
+  it("記録が0件でも指定期間のMarkdown行を生成する", () => {
+    const markdown = generateSessionsMarkdown([], {
+      startDate: "2026-07-01",
+      endDate: "2026-07-02",
+    });
+
+    expect(markdown.split("\n").slice(2)).toEqual([
+      "| 07/01 | --- | --- | --- | --- | --- | --- | --- | --- |",
+      "| 07/02 | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]);
   });
 
   it("不要フィールドを出力しない", () => {
