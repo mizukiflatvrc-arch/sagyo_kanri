@@ -106,18 +106,19 @@ export function mapSessionDocument(
 ): LibrarySession {
   const data = snapshot.data({ serverTimestamps: "estimate" });
   const isLegacyEncrypted = isLegacyEncryptedRecord(data);
+  const stayMinutes = finiteNumber(data.stayMinutes);
   return {
     id: snapshot.id,
     userId: stringFrom(data.userId),
     libraryId: stringFrom(data.libraryId),
     enteredAt: dateFrom(data.enteredAt),
     exitedAt: dateFrom(data.exitedAt),
-    stayMinutes: finiteNumber(data.stayMinutes),
+    stayMinutes,
     actualWorkMinutes: finiteNumber(data.actualWorkMinutes),
     concentrationScore: finiteNumber(data.concentrationScore),
     anxietyScore: finiteNumber(data.anxietyScore),
     fatigueScore: finiteNumber(data.fatigueScore),
-    selfCriticismMinutes: finiteNumber(data.selfCriticismMinutes),
+    selfCriticismScore: selfCriticismScoreFromData(data, stayMinutes),
     plannedTaskCreated: booleanFrom(data.plannedTaskCreated),
     plannedTaskText: isLegacyEncrypted ? "" : stringFrom(data.plannedTaskText),
     actualTaskText: isLegacyEncrypted ? "" : stringFrom(data.actualTaskText),
@@ -129,4 +130,28 @@ export function mapSessionDocument(
     createdAt: dateFrom(data.createdAt),
     updatedAt: dateFrom(data.updatedAt),
   };
+}
+
+/**
+ * Converts the former minute-based field to the new 0..10 proportion score.
+ * Current records always use selfCriticismScore; this fallback only keeps
+ * existing Firestore documents readable until they are edited or migrated.
+ */
+export function selfCriticismScoreFromData(
+  data: DocumentData,
+  knownStayMinutes?: number,
+): number {
+  if (data.selfCriticismScore !== undefined) {
+    return finiteNumber(data.selfCriticismScore);
+  }
+
+  const selfCriticismMinutes = finiteNumber(data.selfCriticismMinutes);
+  const stayMinutes = knownStayMinutes ?? finiteNumber(data.stayMinutes);
+  if (stayMinutes <= 0) {
+    throw new InvalidFirestoreDataError();
+  }
+  return Math.min(
+    10,
+    Math.max(0, Math.round((selfCriticismMinutes / stayMinutes) * 10)),
+  );
 }

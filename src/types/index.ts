@@ -34,7 +34,7 @@ export interface LibrarySession {
   concentrationScore: number;
   anxietyScore: number;
   fatigueScore: number;
-  selfCriticismMinutes: number;
+  selfCriticismScore: number;
 
   plannedTaskCreated: boolean;
   plannedTaskText: string;
@@ -118,8 +118,7 @@ export interface SessionFormValues {
   concentrationScore: number;
   anxietyScore: number;
   fatigueScore: number;
-  selfCriticismHours: string;
-  selfCriticismMinutes: string;
+  selfCriticismScore: number;
 
   plannedTaskCreated: boolean;
   plannedTaskText: string;
@@ -164,7 +163,7 @@ export interface ParsedSessionFormValues {
   concentrationScore: number;
   anxietyScore: number;
   fatigueScore: number;
-  selfCriticismMinutes: number;
+  selfCriticismScore: number;
   plannedTaskCreated: boolean;
   plannedTaskText: string;
   actualTaskText: string;

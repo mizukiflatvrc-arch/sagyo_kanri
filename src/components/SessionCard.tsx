@@ -25,6 +25,7 @@ const scoreItems = [
   { key: "concentrationScore", label: "集中度" },
   { key: "anxietyScore", label: "焦り" },
   { key: "fatigueScore", label: "疲労" },
+  { key: "selfCriticismScore", label: "自己否定" },
 ] as const;
 
 export function SessionCard({

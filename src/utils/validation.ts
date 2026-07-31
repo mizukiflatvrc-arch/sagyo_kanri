@@ -52,7 +52,11 @@ export function parseDurationParts(
 
 function validateScore(
   value: number,
-  field: "concentrationScore" | "anxietyScore" | "fatigueScore",
+  field:
+    | "concentrationScore"
+    | "anxietyScore"
+    | "fatigueScore"
+    | "selfCriticismScore",
   label: string,
   errors: SessionFormErrors,
 ): void {
@@ -116,22 +120,6 @@ export function validateSessionForm(
     errors.actualWorkMinutes = "実作業時間は滞在時間以内にしてください";
   }
 
-  const selfCriticismMinutes = parseDurationParts(
-    values.selfCriticismHours,
-    values.selfCriticismMinutes,
-  );
-  if (selfCriticismMinutes === null) {
-    errors.selfCriticismMinutes =
-      "自己否定していた時間は0以上の時間と0〜59の分で入力してください";
-  } else if (
-    stayMinutes !== null &&
-    stayMinutes > 0 &&
-    selfCriticismMinutes > stayMinutes
-  ) {
-    errors.selfCriticismMinutes =
-      "自己否定していた時間は滞在時間以内にしてください";
-  }
-
   validateScore(
     values.concentrationScore,
     "concentrationScore",
@@ -140,6 +128,12 @@ export function validateSessionForm(
   );
   validateScore(values.anxietyScore, "anxietyScore", "焦り", errors);
   validateScore(values.fatigueScore, "fatigueScore", "疲労", errors);
+  validateScore(
+    values.selfCriticismScore,
+    "selfCriticismScore",
+    "自己否定の割合",
+    errors,
+  );
 
   if (!isMemberOf(COMPLETION_STATUSES, values.completionStatus)) {
     errors.completionStatus = "終了状況を選択してください";
@@ -215,16 +209,11 @@ export function parseSessionForm(
     values.actualWorkHours,
     values.actualWorkMinutes,
   );
-  const selfCriticismMinutes = parseDurationParts(
-    values.selfCriticismHours,
-    values.selfCriticismMinutes,
-  );
 
   if (
     enteredAt === null ||
     exitedAt === null ||
-    actualWorkMinutes === null ||
-    selfCriticismMinutes === null
+    actualWorkMinutes === null
   ) {
     return null;
   }
@@ -238,7 +227,7 @@ export function parseSessionForm(
     concentrationScore: values.concentrationScore,
     anxietyScore: values.anxietyScore,
     fatigueScore: values.fatigueScore,
-    selfCriticismMinutes,
+    selfCriticismScore: values.selfCriticismScore,
     plannedTaskCreated: values.plannedTaskCreated,
     plannedTaskText: values.plannedTaskText.trim(),
     actualTaskText: values.actualTaskText.trim(),

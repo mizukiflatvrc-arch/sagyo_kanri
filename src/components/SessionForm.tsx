@@ -320,24 +320,19 @@ export function SessionForm({
             {...(errors.fatigueScore ? { error: errors.fatigueScore } : {})}
             disabled={isSaving}
           />
+          <ScoreField
+            id={selfCriticismId}
+            name="selfCriticismScore"
+            label="自己否定の割合"
+            value={values.selfCriticismScore}
+            onChange={(value) => updateField("selfCriticismScore", value)}
+            description="作業時間全体のうち自己否定が占めた感覚的な割合です。0は「なし」、10は「ほぼ全体」の目安です。"
+            {...(errors.selfCriticismScore
+              ? { error: errors.selfCriticismScore }
+              : {})}
+            disabled={isSaving}
+          />
         </div>
-
-        <DurationField
-          id={selfCriticismId}
-          label="作業中に自己否定していた時間"
-          hours={values.selfCriticismHours}
-          minutes={values.selfCriticismMinutes}
-          onHoursChange={(value) => updateField("selfCriticismHours", value)}
-          onMinutesChange={(value) => updateField("selfCriticismMinutes", value)}
-          hoursName="selfCriticismHours"
-          minutesName="selfCriticismMinutes"
-          description="おおよその時間で構いません。"
-          {...(errors.selfCriticismMinutes
-            ? { error: errors.selfCriticismMinutes }
-            : {})}
-          disabled={isSaving}
-          required
-        />
         </div>
       </fieldset>
 

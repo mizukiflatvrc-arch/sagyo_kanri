@@ -22,7 +22,7 @@ function session(
     concentrationScore: 7,
     anxietyScore: 4,
     fatigueScore: 6,
-    selfCriticismMinutes: 20,
+    selfCriticismScore: 2,
     ...overrides,
   };
 }
@@ -84,7 +84,7 @@ describe("generateSessionsMarkdown", () => {
       "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     );
     expect(lines[2]).toBe(
-      "| 07/28 | 10:15 | 12:30 | 02:15 | 01:40 | 7 | 4 | 6 | 00:20 |",
+      "| 07/28 | 10:15 | 12:30 | 02:15 | 01:40 | 7 | 4 | 6 | 2 |",
     );
   });
 
@@ -115,7 +115,7 @@ describe("generateSessionsMarkdown", () => {
       concentrationScore: "---",
       anxietyScore: "---",
       fatigueScore: "---",
-      selfCriticismDuration: "---",
+      selfCriticismScore: "---",
     });
     expect(rows[1]?.workDate).toBe("07/02");
     expect(rows[1]?.enteredTime).toBe("10:00");

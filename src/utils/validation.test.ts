@@ -28,8 +28,7 @@ function validSessionForm(
     exitedAt: "2026-07-23T11:00",
     actualWorkHours: "1",
     actualWorkMinutes: "20",
-    selfCriticismHours: "0",
-    selfCriticismMinutes: "15",
+    selfCriticismScore: 2,
     ...overrides,
   };
 }
@@ -41,6 +40,7 @@ describe("validateSessionForm", () => {
         concentrationScore: 0,
         anxietyScore: 10,
         fatigueScore: 5,
+        selfCriticismScore: 0,
       }),
     );
 
@@ -71,34 +71,30 @@ describe("validateSessionForm", () => {
     expect(errors.exitedAt).toBeDefined();
   });
 
-  it("rejects work and self-criticism durations longer than the stay", () => {
+  it("rejects work duration longer than the stay", () => {
     const errors = validateSessionForm(
       validSessionForm({
         enteredAt: "2026-07-23T09:00",
         exitedAt: "2026-07-23T10:00",
         actualWorkHours: "1",
         actualWorkMinutes: "1",
-        selfCriticismHours: "2",
-        selfCriticismMinutes: "0",
       }),
     );
 
     expect(errors.actualWorkMinutes).toContain("滞在時間以内");
-    expect(errors.selfCriticismMinutes).toContain("滞在時間以内");
   });
 
-  it("allows zero minutes and the exact stay duration", () => {
+  it("allows zero score and the exact stay duration", () => {
     const errors = validateSessionForm(
       validSessionForm({
         actualWorkHours: "2",
         actualWorkMinutes: "0",
-        selfCriticismHours: "0",
-        selfCriticismMinutes: "0",
+        selfCriticismScore: 0,
       }),
     );
 
     expect(errors.actualWorkMinutes).toBeUndefined();
-    expect(errors.selfCriticismMinutes).toBeUndefined();
+    expect(errors.selfCriticismScore).toBeUndefined();
   });
 
   it.each([
@@ -108,10 +104,14 @@ describe("validateSessionForm", () => {
     ["not finite", Number.NaN],
   ])("rejects a %s score", (_label, score) => {
     const errors = validateSessionForm(
-      validSessionForm({ concentrationScore: score }),
+      validSessionForm({
+        concentrationScore: score,
+        selfCriticismScore: score,
+      }),
     );
 
     expect(errors.concentrationScore).toBeDefined();
+    expect(errors.selfCriticismScore).toBeDefined();
   });
 
   it("rejects invalid calendar dates and malformed duration parts", () => {
@@ -120,13 +120,11 @@ describe("validateSessionForm", () => {
         enteredAt: "2026-02-30T09:00",
         actualWorkHours: "-1",
         actualWorkMinutes: "60",
-        selfCriticismHours: "0.5",
       }),
     );
 
     expect(errors.enteredAt).toBeDefined();
     expect(errors.actualWorkMinutes).toBeDefined();
-    expect(errors.selfCriticismMinutes).toBeDefined();
   });
 });
 
@@ -144,6 +142,7 @@ describe("form parsing", () => {
     expect(parsed?.enteredAt.toISOString()).toBe("2026-07-23T00:00:00.000Z");
     expect(parsed?.stayMinutes).toBe(120);
     expect(parsed?.actualWorkMinutes).toBe(80);
+    expect(parsed?.selfCriticismScore).toBe(2);
   });
 
   it("returns null for invalid form values", () => {
@@ -197,7 +196,7 @@ describe("duration formatting and form mapping", () => {
       concentrationScore: 6,
       anxietyScore: 4,
       fatigueScore: 5,
-      selfCriticismMinutes: 15,
+      selfCriticismScore: 2,
       plannedTaskCreated: true,
       plannedTaskText: "資料を読む",
       actualTaskText: "資料を読んだ",
@@ -215,8 +214,7 @@ describe("duration formatting and form mapping", () => {
       exitedAt: "2026-07-23T11:00",
       actualWorkHours: "1",
       actualWorkMinutes: "20",
-      selfCriticismHours: "0",
-      selfCriticismMinutes: "15",
+      selfCriticismScore: 2,
     });
   });
 });

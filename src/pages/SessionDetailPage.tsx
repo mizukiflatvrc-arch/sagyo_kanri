@@ -187,8 +187,8 @@ export function SessionDetailPage() {
                 <dd>{session.fatigueScore} / 10</dd>
               </div>
               <div className="detail-item">
-                <dt>自己否定していた時間</dt>
-                <dd>{formatMinutes(session.selfCriticismMinutes)}</dd>
+                <dt>自己否定の割合</dt>
+                <dd>{session.selfCriticismScore} / 10</dd>
               </div>
             </dl>
           </section>

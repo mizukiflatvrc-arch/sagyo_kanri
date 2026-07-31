@@ -21,7 +21,10 @@ import type {
   NextDayReaction,
 } from "../types";
 import { requireFirestore } from "../lib/firebase";
-import { mapSessionDocument } from "./firestoreMappers";
+import {
+  mapSessionDocument,
+  selfCriticismScoreFromData,
+} from "./firestoreMappers";
 import { ConcurrentEditError } from "./errors";
 import { LEGACY_RECORD_MESSAGE } from "./legacyRecords";
 import type { ExportSessionRecord } from "../utils/export";
@@ -35,7 +38,7 @@ const EDITABLE_KEYS = [
   "concentrationScore",
   "anxietyScore",
   "fatigueScore",
-  "selfCriticismMinutes",
+  "selfCriticismScore",
   "plannedTaskCreated",
   "plannedTaskText",
   "actualTaskText",
@@ -69,6 +72,12 @@ function sessionPayload(input: EditableLibrarySessionFields) {
 
 function comparableValue(value: unknown): unknown {
   return value instanceof Date ? value.getTime() : value;
+}
+
+function dataDoesNotHaveCurrentSelfCriticismScore(
+  data: DocumentData,
+): boolean {
+  return data.selfCriticismScore === undefined;
 }
 
 function changedFields(
@@ -132,7 +141,7 @@ export async function getSessionsForExport(
         concentrationScore: exportNumber(data.concentrationScore),
         anxietyScore: exportNumber(data.anxietyScore),
         fatigueScore: exportNumber(data.fatigueScore),
-        selfCriticismMinutes: exportNumber(data.selfCriticismMinutes),
+        selfCriticismScore: selfCriticismScoreFromData(data),
       };
     });
 }
@@ -189,6 +198,12 @@ async function updateWithRevision(
     }
     const next = buildNext(current);
     const fields = changedFields(current, next);
+    if (
+      dataDoesNotHaveCurrentSelfCriticismScore(raw) &&
+      !fields.includes("selfCriticismScore")
+    ) {
+      fields.push("selfCriticismScore");
+    }
     if (fields.length === 0) return;
 
     const currentVersion =
@@ -258,7 +273,7 @@ export async function updateNextDayReaction(
       concentrationScore: current.concentrationScore,
       anxietyScore: current.anxietyScore,
       fatigueScore: current.fatigueScore,
-      selfCriticismMinutes: current.selfCriticismMinutes,
+      selfCriticismScore: current.selfCriticismScore,
       plannedTaskCreated: current.plannedTaskCreated,
       plannedTaskText: current.plannedTaskText,
       actualTaskText: current.actualTaskText,

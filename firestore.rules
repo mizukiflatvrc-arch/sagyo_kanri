@@ -44,6 +44,22 @@ service cloud.firestore {
       return data.keys().hasAny(["archivedAt"]);
     }
 
+    function hasLegacySelfCriticismMinutes(data) {
+      return data.keys().hasAny(["selfCriticismMinutes"]);
+    }
+
+    function preservesLegacySelfCriticismMinutes(before, after) {
+      return (
+          !hasLegacySelfCriticismMinutes(before)
+          && !hasLegacySelfCriticismMinutes(after)
+        )
+        || (
+          hasLegacySelfCriticismMinutes(before)
+          && hasLegacySelfCriticismMinutes(after)
+          && after.selfCriticismMinutes == before.selfCriticismMinutes
+        );
+    }
+
     function isActiveLibraryAfter(userId, libraryId) {
       return existsAfter(libraryPath(userId, libraryId))
         && !hasArchivedAt(
@@ -144,7 +160,7 @@ service cloud.firestore {
           "concentrationScore",
           "anxietyScore",
           "fatigueScore",
-          "selfCriticismMinutes",
+          "selfCriticismScore",
           "plannedTaskCreated",
           "plannedTaskText",
           "actualTaskText",
@@ -166,6 +182,9 @@ service cloud.firestore {
           "concentrationScore",
           "anxietyScore",
           "fatigueScore",
+          "selfCriticismScore",
+          // Read-only compatibility field on records created before the
+          // proportion score was introduced.
           "selfCriticismMinutes",
           "plannedTaskCreated",
           "plannedTaskText",
@@ -193,9 +212,10 @@ service cloud.firestore {
         && isValidScore(data.concentrationScore)
         && isValidScore(data.anxietyScore)
         && isValidScore(data.fatigueScore)
-        && data.selfCriticismMinutes is int
-        && data.selfCriticismMinutes >= 0
-        && data.selfCriticismMinutes <= data.stayMinutes
+        && isValidScore(data.selfCriticismScore)
+        && data.get("selfCriticismMinutes", 0) is int
+        && data.get("selfCriticismMinutes", 0) >= 0
+        && data.get("selfCriticismMinutes", 0) <= data.stayMinutes
         && data.plannedTaskCreated is bool
         && isCurrentText(data.plannedTaskText)
         && isCurrentText(data.actualTaskText)
@@ -231,7 +251,7 @@ service cloud.firestore {
           "concentrationScore",
           "anxietyScore",
           "fatigueScore",
-          "selfCriticismMinutes",
+          "selfCriticismScore",
           "plannedTaskCreated",
           "plannedTaskText",
           "actualTaskText",
@@ -336,6 +356,7 @@ service cloud.firestore {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId)
                     && isValidSession(request.resource.data, userId)
+                    && !hasLegacySelfCriticismMinutes(request.resource.data)
                     && isNotDeleting(request.resource.data)
                     && request.resource.data.version == 1
                     && request.resource.data.createdAt == request.time
@@ -354,6 +375,10 @@ service cloud.firestore {
                           == resource.data.userId
                         && request.resource.data.createdAt
                           == resource.data.createdAt
+                        && preservesLegacySelfCriticismMinutes(
+                          resource.data,
+                          request.resource.data
+                        )
                         && request.resource.data.version
                           == resource.data.version + 1
                         && request.resource.data.updatedAt == request.time

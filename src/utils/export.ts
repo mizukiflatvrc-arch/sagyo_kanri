@@ -13,7 +13,7 @@ export const EXPORT_TABLE_HEADERS = [
   "集中度（0～10）",
   "焦り・不安（0～10）",
   "疲労度（0～10）",
-  "自己否定時間",
+  "自己否定割合（0～10）",
 ] as const;
 
 export interface ExportSessionRecord {
@@ -24,7 +24,7 @@ export interface ExportSessionRecord {
   concentrationScore: number;
   anxietyScore: number;
   fatigueScore: number;
-  selfCriticismMinutes: number;
+  selfCriticismScore: number;
 }
 
 export interface ExportTableRow {
@@ -36,7 +36,7 @@ export interface ExportTableRow {
   concentrationScore: string;
   anxietyScore: string;
   fatigueScore: string;
-  selfCriticismDuration: string;
+  selfCriticismScore: string;
 }
 
 export interface ExportPeriod {
@@ -97,9 +97,7 @@ function tableRowFromSession(session: ExportSessionRecord): ExportTableRow {
     concentrationScore: formatScore(session.concentrationScore),
     anxietyScore: formatScore(session.anxietyScore),
     fatigueScore: formatScore(session.fatigueScore),
-    selfCriticismDuration: formatMinutesAsClock(
-      session.selfCriticismMinutes,
-    ),
+    selfCriticismScore: formatScore(session.selfCriticismScore),
   };
 }
 
@@ -114,7 +112,7 @@ function emptyTableRow(dateKey: string): ExportTableRow {
     concentrationScore: emptyValue,
     anxietyScore: emptyValue,
     fatigueScore: emptyValue,
-    selfCriticismDuration: emptyValue,
+    selfCriticismScore: emptyValue,
   };
 }
 
@@ -158,7 +156,7 @@ function rowValues(row: ExportTableRow): string[] {
     row.concentrationScore,
     row.anxietyScore,
     row.fatigueScore,
-    row.selfCriticismDuration,
+    row.selfCriticismScore,
   ];
 }
 

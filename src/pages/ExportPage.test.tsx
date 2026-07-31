@@ -28,7 +28,7 @@ const RECORD: ExportSessionRecord = {
   concentrationScore: 7,
   anxietyScore: 4,
   fatigueScore: 6,
-  selfCriticismMinutes: 20,
+  selfCriticismScore: 2,
 };
 
 function buttonByText(container: HTMLElement, text: string) {

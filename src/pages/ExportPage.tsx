@@ -395,7 +395,7 @@ function ExportDataTable({
             <td>{row.concentrationScore}</td>
             <td>{row.anxietyScore}</td>
             <td>{row.fatigueScore}</td>
-            <td>{row.selfCriticismDuration}</td>
+            <td>{row.selfCriticismScore}</td>
           </tr>
         ))}
       </tbody>

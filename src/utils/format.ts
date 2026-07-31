@@ -104,8 +104,7 @@ export function createEmptySessionFormValues(
     concentrationScore: 5,
     anxietyScore: 5,
     fatigueScore: 5,
-    selfCriticismHours: "0",
-    selfCriticismMinutes: "0",
+    selfCriticismScore: 0,
     plannedTaskCreated: false,
     plannedTaskText: "",
     actualTaskText: "",
@@ -120,7 +119,6 @@ export function sessionToFormValues(
   session: LibrarySession,
 ): SessionFormValues {
   const actualWork = minutesToParts(session.actualWorkMinutes);
-  const selfCriticism = minutesToParts(session.selfCriticismMinutes);
 
   return {
     libraryId: session.libraryId,
@@ -131,8 +129,7 @@ export function sessionToFormValues(
     concentrationScore: session.concentrationScore,
     anxietyScore: session.anxietyScore,
     fatigueScore: session.fatigueScore,
-    selfCriticismHours: String(selfCriticism.hours),
-    selfCriticismMinutes: String(selfCriticism.minutes),
+    selfCriticismScore: session.selfCriticismScore,
     plannedTaskCreated: session.plannedTaskCreated,
     plannedTaskText: session.plannedTaskText,
     actualTaskText: session.actualTaskText,

@@ -54,7 +54,7 @@ function validSessionDocument(userId: string) {
     concentrationScore: 6,
     anxietyScore: 4,
     fatigueScore: 5,
-    selfCriticismMinutes: 15,
+    selfCriticismScore: 2,
     plannedTaskCreated: true,
     plannedTaskText: "資料を読む",
     actualTaskText: "資料を読んだ",
@@ -775,6 +775,81 @@ describe("Firestore security rules", () => {
         ...validSessionDocument(OWNER_UID),
         concentrationScore: 11,
       }),
+    );
+    await assertFails(
+      setDoc(sessionReference, {
+        ...validSessionDocument(OWNER_UID),
+        selfCriticismScore: 11,
+      }),
+    );
+  });
+
+  it("旧自己否定時間の記録は新しい割合スコアの追加で移行できる", async () => {
+    const firestore = testEnvironment
+      .authenticatedContext(OWNER_UID)
+      .firestore();
+    const sessionReference = doc(
+      firestore,
+      `users/${OWNER_UID}/sessions/session-1`,
+    );
+    const oldSession: Record<string, unknown> = {
+      ...validSessionDocument(OWNER_UID),
+      selfCriticismMinutes: 30,
+    };
+    delete oldSession.selfCriticismScore;
+
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(
+        doc(
+          context.firestore(),
+          `users/${OWNER_UID}/libraries/library-1`,
+        ),
+        validLibraryDocument(OWNER_UID),
+      );
+      await setDoc(
+        doc(
+          context.firestore(),
+          `users/${OWNER_UID}/sessions/session-1`,
+        ),
+        oldSession,
+      );
+    });
+
+    const before = (await getDoc(sessionReference)).data() ?? {};
+    const migrationBatch = writeBatch(firestore);
+    migrationBatch.set(
+      doc(
+        firestore,
+        `users/${OWNER_UID}/sessions/session-1/revisions/1`,
+      ),
+      validRevisionDocument(
+        "session-1",
+        1,
+        before,
+        ["selfCriticismScore"],
+      ),
+    );
+    migrationBatch.update(sessionReference, {
+      selfCriticismScore: 3,
+      version: 2,
+      updatedAt: serverTimestamp(),
+    });
+    await assertSucceeds(migrationBatch.commit());
+
+    await assertFails(
+      setDoc(
+        doc(firestore, `users/${OWNER_UID}/sessions/old-format-new`),
+        oldSession,
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(firestore, `users/${OWNER_UID}/sessions/mixed-format-new`),
+        {
+          ...validSessionDocument(OWNER_UID),
+          selfCriticismMinutes: 30,
+        },
+      ),
     );
   });
 
