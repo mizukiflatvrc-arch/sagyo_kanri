@@ -26,8 +26,6 @@ function validSessionForm(
     libraryId: "library-1",
     enteredAt: "2026-07-23T09:00",
     exitedAt: "2026-07-23T11:00",
-    actualWorkHours: "1",
-    actualWorkMinutes: "20",
     selfCriticismScore: 2,
     ...overrides,
   };
@@ -71,29 +69,13 @@ describe("validateSessionForm", () => {
     expect(errors.exitedAt).toBeDefined();
   });
 
-  it("rejects work duration longer than the stay", () => {
+  it("allows zero score", () => {
     const errors = validateSessionForm(
       validSessionForm({
-        enteredAt: "2026-07-23T09:00",
-        exitedAt: "2026-07-23T10:00",
-        actualWorkHours: "1",
-        actualWorkMinutes: "1",
-      }),
-    );
-
-    expect(errors.actualWorkMinutes).toContain("滞在時間以内");
-  });
-
-  it("allows zero score and the exact stay duration", () => {
-    const errors = validateSessionForm(
-      validSessionForm({
-        actualWorkHours: "2",
-        actualWorkMinutes: "0",
         selfCriticismScore: 0,
       }),
     );
 
-    expect(errors.actualWorkMinutes).toBeUndefined();
     expect(errors.selfCriticismScore).toBeUndefined();
   });
 
@@ -114,17 +96,14 @@ describe("validateSessionForm", () => {
     expect(errors.selfCriticismScore).toBeDefined();
   });
 
-  it("rejects invalid calendar dates and malformed duration parts", () => {
+  it("rejects invalid calendar dates", () => {
     const errors = validateSessionForm(
       validSessionForm({
         enteredAt: "2026-02-30T09:00",
-        actualWorkHours: "-1",
-        actualWorkMinutes: "60",
       }),
     );
 
     expect(errors.enteredAt).toBeDefined();
-    expect(errors.actualWorkMinutes).toBeDefined();
   });
 });
 
@@ -135,13 +114,13 @@ describe("form parsing", () => {
     expect(parseDurationParts("1", "60")).toBeNull();
   });
 
-  it("returns domain Dates and total minutes for valid form values", () => {
+  it("returns domain Dates and stay minutes without actual work minutes", () => {
     const parsed = parseSessionForm(validSessionForm());
 
     expect(parsed).not.toBeNull();
     expect(parsed?.enteredAt.toISOString()).toBe("2026-07-23T00:00:00.000Z");
     expect(parsed?.stayMinutes).toBe(120);
-    expect(parsed?.actualWorkMinutes).toBe(80);
+    expect(parsed).not.toHaveProperty("actualWorkMinutes");
     expect(parsed?.selfCriticismScore).toBe(2);
   });
 
@@ -209,13 +188,14 @@ describe("duration formatting and form mapping", () => {
       updatedAt: new Date("2026-07-23T03:00:00.000Z"),
     };
 
-    expect(sessionToFormValues(session)).toMatchObject({
+    const values = sessionToFormValues(session);
+    expect(values).toMatchObject({
       enteredAt: "2026-07-23T09:00",
       exitedAt: "2026-07-23T11:00",
-      actualWorkHours: "1",
-      actualWorkMinutes: "20",
       selfCriticismScore: 2,
     });
+    expect(values).not.toHaveProperty("actualWorkHours");
+    expect(values).not.toHaveProperty("actualWorkMinutes");
   });
 });
 

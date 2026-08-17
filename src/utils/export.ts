@@ -9,7 +9,6 @@ export const EXPORT_TABLE_HEADERS = [
   "入室時刻",
   "退室時刻",
   "滞在時間",
-  "実作業時間",
   "集中度（0～10）",
   "焦り・不安（0～10）",
   "疲労度（0～10）",
@@ -20,7 +19,6 @@ export interface ExportSessionRecord {
   enteredAt: Date;
   exitedAt: Date;
   stayMinutes: number;
-  actualWorkMinutes: number;
   concentrationScore: number;
   anxietyScore: number;
   fatigueScore: number;
@@ -32,7 +30,6 @@ export interface ExportTableRow {
   enteredTime: string;
   exitedTime: string;
   stayDuration: string;
-  actualWorkDuration: string;
   concentrationScore: string;
   anxietyScore: string;
   fatigueScore: string;
@@ -93,7 +90,6 @@ function tableRowFromSession(session: ExportSessionRecord): ExportTableRow {
     enteredTime: formatExportJstTime(session.enteredAt),
     exitedTime: formatExportJstTime(session.exitedAt),
     stayDuration: formatMinutesAsClock(session.stayMinutes),
-    actualWorkDuration: formatMinutesAsClock(session.actualWorkMinutes),
     concentrationScore: formatScore(session.concentrationScore),
     anxietyScore: formatScore(session.anxietyScore),
     fatigueScore: formatScore(session.fatigueScore),
@@ -108,7 +104,6 @@ function emptyTableRow(dateKey: string): ExportTableRow {
     enteredTime: emptyValue,
     exitedTime: emptyValue,
     stayDuration: emptyValue,
-    actualWorkDuration: emptyValue,
     concentrationScore: emptyValue,
     anxietyScore: emptyValue,
     fatigueScore: emptyValue,
@@ -152,7 +147,6 @@ function rowValues(row: ExportTableRow): string[] {
     row.enteredTime,
     row.exitedTime,
     row.stayDuration,
-    row.actualWorkDuration,
     row.concentrationScore,
     row.anxietyScore,
     row.fatigueScore,
@@ -168,7 +162,7 @@ export function generateSessionsMarkdown(
   if (rows.length === 0) return "";
 
   const header = `| ${EXPORT_TABLE_HEADERS.join(" | ")} |`;
-  const separator = "|---|---:|---:|---:|---:|---:|---:|---:|---:|";
+  const separator = "|---|---:|---:|---:|---:|---:|---:|---:|";
   return [
     header,
     separator,

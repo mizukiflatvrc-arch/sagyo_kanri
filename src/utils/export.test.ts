@@ -18,11 +18,10 @@ function session(
     enteredAt: new Date(enteredAt),
     exitedAt: new Date(new Date(enteredAt).getTime() + 90 * 60_000),
     stayMinutes: 90,
-    actualWorkMinutes: 60,
     concentrationScore: 7,
     anxietyScore: 4,
     fatigueScore: 6,
-    selfCriticismScore: 2,
+    selfCriticismScore: 3,
     ...overrides,
   };
 }
@@ -74,17 +73,16 @@ describe("generateSessionsMarkdown", () => {
       session("2026-07-28T01:15:00.000Z", {
         exitedAt: new Date("2026-07-28T03:30:00.000Z"),
         stayMinutes: 135,
-        actualWorkMinutes: 100,
       }),
     ]);
     const lines = markdown.split("\n");
 
     expect(lines[0]).toBe(`| ${EXPORT_TABLE_HEADERS.join(" | ")} |`);
     expect(lines[1]).toBe(
-      "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+      "|---|---:|---:|---:|---:|---:|---:|---:|",
     );
     expect(lines[2]).toBe(
-      "| 07/28 | 10:15 | 12:30 | 02:15 | 01:40 | 7 | 4 | 6 | 2 |",
+      "| 07/28 | 10:15 | 12:30 | 02:15 | 7 | 4 | 6 | 3 |",
     );
   });
 
@@ -111,7 +109,6 @@ describe("generateSessionsMarkdown", () => {
       enteredTime: "---",
       exitedTime: "---",
       stayDuration: "---",
-      actualWorkDuration: "---",
       concentrationScore: "---",
       anxietyScore: "---",
       fatigueScore: "---",
@@ -149,14 +146,27 @@ describe("generateSessionsMarkdown", () => {
     });
 
     expect(markdown.split("\n").slice(2)).toEqual([
-      "| 07/01 | --- | --- | --- | --- | --- | --- | --- | --- |",
-      "| 07/02 | --- | --- | --- | --- | --- | --- | --- | --- |",
+      "| 07/01 | --- | --- | --- | --- | --- | --- | --- |",
+      "| 07/02 | --- | --- | --- | --- | --- | --- | --- |",
     ]);
+  });
+
+  it("自己否定の割合を0〜10のスコアで表示する", () => {
+    expect(
+      generateSessionsMarkdown([
+        session("2026-07-28T01:15:00.000Z", {
+          selfCriticismScore: 8,
+        }),
+      ]).split("\n")[2],
+    ).toBe(
+      "| 07/28 | 10:15 | 11:45 | 01:30 | 7 | 4 | 6 | 8 |",
+    );
   });
 
   it("不要フィールドを出力しない", () => {
     const record = {
       ...session("2026-07-28T01:15:00.000Z"),
+      actualWorkMinutes: 777,
       userId: "secret-user",
       libraryId: "secret-library",
       note: "private-note",
@@ -169,6 +179,8 @@ describe("generateSessionsMarkdown", () => {
     expect(markdown).not.toContain("secret-user");
     expect(markdown).not.toContain("secret-library");
     expect(markdown).not.toContain("private-");
+    expect(markdown).not.toContain("実作業時間");
+    expect(markdown).not.toContain("12:57");
   });
 
   it("0件を空文字列として安全に扱う", () => {

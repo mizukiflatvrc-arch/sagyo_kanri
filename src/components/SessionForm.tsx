@@ -22,7 +22,6 @@ import {
   parseSessionForm,
   validateSessionForm,
 } from "../utils/validation";
-import { DurationField } from "./DurationField";
 import { ScoreField } from "./ScoreField";
 import { useUnsavedChanges } from "../hooks/useUnsavedChanges";
 
@@ -114,7 +113,6 @@ export function SessionForm({
   const libraryId = `${formId}-library`;
   const enteredAtId = `${formId}-entered-at`;
   const exitedAtId = `${formId}-exited-at`;
-  const actualWorkId = `${formId}-actual-work`;
   const concentrationId = `${formId}-concentration`;
   const anxietyId = `${formId}-anxiety`;
   const fatigueId = `${formId}-fatigue`;
@@ -270,23 +268,6 @@ export function SessionForm({
         <legend>作業中の状態</legend>
 
         <div className="form-grid form-grid--single">
-        <DurationField
-          id={actualWorkId}
-          label="実作業時間"
-          hours={values.actualWorkHours}
-          minutes={values.actualWorkMinutes}
-          onHoursChange={(value) => updateField("actualWorkHours", value)}
-          onMinutesChange={(value) => updateField("actualWorkMinutes", value)}
-          hoursName="actualWorkHours"
-          minutesName="actualWorkMinutes"
-          description="休憩を除き、実際に作業した時間を入力します。"
-          {...(errors.actualWorkMinutes
-            ? { error: errors.actualWorkMinutes }
-            : {})}
-          disabled={isSaving}
-          required
-        />
-
         <div className="score-grid score-fields">
           <ScoreField
             id={concentrationId}

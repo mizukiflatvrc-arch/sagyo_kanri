@@ -391,7 +391,6 @@ function ExportDataTable({
             <td>{row.enteredTime}</td>
             <td>{row.exitedTime}</td>
             <td>{row.stayDuration}</td>
-            <td>{row.actualWorkDuration}</td>
             <td>{row.concentrationScore}</td>
             <td>{row.anxietyScore}</td>
             <td>{row.fatigueScore}</td>

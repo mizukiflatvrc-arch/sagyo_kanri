@@ -107,14 +107,13 @@ export function mapSessionDocument(
   const data = snapshot.data({ serverTimestamps: "estimate" });
   const isLegacyEncrypted = isLegacyEncryptedRecord(data);
   const stayMinutes = finiteNumber(data.stayMinutes);
-  return {
+  const session: LibrarySession = {
     id: snapshot.id,
     userId: stringFrom(data.userId),
     libraryId: stringFrom(data.libraryId),
     enteredAt: dateFrom(data.enteredAt),
     exitedAt: dateFrom(data.exitedAt),
     stayMinutes,
-    actualWorkMinutes: finiteNumber(data.actualWorkMinutes),
     concentrationScore: finiteNumber(data.concentrationScore),
     anxietyScore: finiteNumber(data.anxietyScore),
     fatigueScore: finiteNumber(data.fatigueScore),
@@ -130,6 +129,13 @@ export function mapSessionDocument(
     createdAt: dateFrom(data.createdAt),
     updatedAt: dateFrom(data.updatedAt),
   };
+  if (data.actualWorkMinutes !== undefined) {
+    session.actualWorkMinutes = finiteNumber(data.actualWorkMinutes);
+  }
+  if (data.selfCriticismMinutes !== undefined) {
+    session.selfCriticismMinutes = finiteNumber(data.selfCriticismMinutes);
+  }
+  return session;
 }
 
 /**

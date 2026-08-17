@@ -2,7 +2,7 @@
 
 図書館での作業時間とその日の状態、翌日の反動をユーザーごとに記録するWebアプリです。記録と振り返りの補助を目的としており、医療的な診断・治療や復学可否の判定は行いません。
 
-今回の実装範囲は要件のPhase 1・2です。Googleログイン、ユーザーごとのデータ分離、図書館CRUD、作業記録CRUD、翌日の状態の追加入力、入力検証、更新前スナップショット保存、Firestore Security Rulesまで実装しています。
+Googleログイン、ユーザーごとのデータ分離、図書館CRUD、作業記録CRUD、タイムカード方式の入退室、翌日の状態の追加入力、入力検証、更新前スナップショット保存、Firestore Security Rulesを実装しています。
 
 ## 1. 推奨ディレクトリ構成
 
@@ -32,11 +32,16 @@ UI、型、検証、Firebase初期化、Firestore処理を分離しています�
 
 ```text
 users/{uid}/libraries/{libraryId}
+users/{uid}/activeSession/current
 users/{uid}/sessions/{sessionId}
 users/{uid}/sessions/{sessionId}/revisions/{revisionId}
 ```
 
 編集時はトランザクションを使い、更新前のセッション全体を`revisions`へ保存してから本体を更新します。更新履歴の表示画面はPhase 3で追加する想定です。
+
+入室中のデータはユーザーごとの固定ドキュメント
+`activeSession/current`へ保存します。PCとスマートフォンは同じドキュメントを
+リアルタイム購読するため、どちらからでも入室中・日報入力中の状態を確認できます。
 
 図書館の「削除」は内部的には論理削除です。過去の記録から図書館名やマップ情報が失われないようFirestore上には保持し、新規記録や管理画面の候補から除外します。
 
@@ -122,6 +127,7 @@ firebase deploy --only firestore:rules
 
 - `Library`
 - `LibrarySession`
+- `ActiveSession`
 - `CompletionStatus`
 - `NextDayReaction`
 - `SessionFormValues`
@@ -185,6 +191,7 @@ Firestore処理は画面から分離しています。
 
 - `src/services/libraries.ts`: 図書館の購読、追加、編集、削除
 - `src/services/sessions.ts`: 記録の購読、追加、編集、削除、翌日追記
+- `src/services/activeSessions.ts`: 入室中記録の購読、開始、退出確定、取消、日報確定
 - `src/services/firestoreMappers.ts`: Firestoreデータとドメイン型の変換
 - `src/services/legacyRecords.ts`: 旧暗号化形式の最小限の検出
 
@@ -211,11 +218,30 @@ Firestore処理は画面から分離しています。
 3. 未使用の図書館を削除します。
 4. 記録で使用中の図書館が削除できないことを確認します。
 
-## 8. セッションCRUD
+## 8. タイムカード方式の入退室
+
+ホームの主要導線はタイムカード方式です。
+
+1. 図書館へ着いた時に「入室する」を押します。この時点では図書館や状態を入力しません。
+2. `users/{uid}/activeSession/current`へサーバー時刻を保存します。
+3. 退出時に「退出して日報を書く」を押すと、最初に押した退出時刻が固定されます。
+4. 利用した図書館、その日の状態、予定と実際の作業、終了状況、メモを入力します。
+5. 完成済みセッションの作成とactiveSessionの削除を1つのトランザクションで確定します。
+
+日報入力を途中で閉じてもactiveSessionと最初の退出時刻は残り、ホームから
+再開できます。入室日時と退出日時は日報で手動修正できるため、押し忘れにも
+対応できます。日をまたいだ場合はホームに注意を表示しますが、自動退出は
+行いません。誤って開始した入室記録は、確認ダイアログから取り消せます。
+
+固定ドキュメントとFirestoreトランザクションにより、複数端末で同時に押しても
+入室中データは1件だけです。日報確定もactiveSessionを読み取ってから行うため、
+連打や別端末からの同時保存で完成済みセッションが重複しないようにしています。
+
+## 9. セッションCRUD
 
 `/sessions`、`/sessions/new`、`/sessions/:id`から次の操作ができます。
 
-- 図書館、入退室日時、実作業時間を記録
+- 過去の記録として、図書館と入退室日時を手入力
 - 集中度、焦り、疲労、作業時間に占める自己否定の割合を0〜10で記録
 - 予定タスク、実際の作業、終了状況、メモを記録
 - 新しい順の一覧、詳細、編集、削除
@@ -225,26 +251,29 @@ Firestore処理は画面から分離しています。
 
 - 入室日時より退室日時が後
 - 滞在時間が1分以上
-- 実作業時間が滞在時間以内
 - 各スコアが0〜10の整数
 - 図書館が必須
 - URL、緯度、経度の形式と範囲
 
-自己否定は現在、`selfCriticismScore`として0〜10の整数で保存します。
-旧記録の`selfCriticismMinutes`は読み取り互換のためだけに残し、画面では
-`round(selfCriticismMinutes / stayMinutes * 10)`を0〜10へ収めた値として
-表示します。旧記録を編集すると、更新前スナップショットを残したうえで
-`selfCriticismScore`が追加されます。新規記録へ旧フィールドを保存することや、
-既存の旧フィールドをクライアントから改変することはSecurity Rulesで拒否します。
+一般追加とタイムカード方式の日報のどちらでも、自己否定の割合は0〜10の
+`selfCriticismScore`として入力・保存・表示・出力します。過去形式の
+`selfCriticismMinutes`しか持たない記録は、滞在時間に対する割合へ変換して読み込み、
+保存済みの分数自体は互換性のため削除しません。
+
+`actualWorkMinutes`は新しい記録では保存せず、入力も求めません。集中できなかった
+時間を細かく除外することが自己評価や自己否定を強めないよう、図書館に滞在できた
+事実とその日の状態を優先するためです。過去データに保存済みの値は削除せず、
+編集や翌日の追記でもそのまま保持します。過去値がある記録の既存詳細表示も
+維持しますが、Markdown・HTML・印刷表には出力しません。
 
 確認:
 
 1. 正常な記録を追加します。
-2. 実作業時間を滞在時間より長くして、保存が止まりエラーが表示されることを確認します。
+2. 退室日時を入室日時以前にして、保存が止まりエラーが表示されることを確認します。
 3. 詳細から編集し、変更が反映されることを確認します。
 4. 削除確認をキャンセルした場合は残り、確定した場合だけ削除されることを確認します。
 
-## 9. 翌日の反動の追加入力
+## 10. 翌日の反動の追加入力
 
 新規記録では`pending`（翌日確認待ち）として保存します。ホームの「翌日確認待ち」または記録詳細から専用画面を開き、次のいずれかと補足メモを追記できます。
 
@@ -254,13 +283,13 @@ Firestore処理は画面から分離しています。
 
 追記も通常の編集と同様に、更新前スナップショットを保存します。
 
-## 10. Firestore Security Rulesとテスト
+## 11. Firestore Security Rulesとテスト
 
 ルールは次を強制します。
 
 - 未認証ユーザーは全拒否
 - 認証済みユーザーでも他ユーザーのパスは拒否
-- 認証済み本人の`libraries`、`sessions`、`revisions`だけ許可
+- 認証済み本人の`libraries`、`activeSession/current`、`sessions`、`revisions`だけ許可
 - 保存データのキー、型、値域、Timestampを検証
 - セッション更新と更新前スナップショットの同時書き込みを強制
 - 論理削除済み図書館への新しい参照を拒否
@@ -296,7 +325,7 @@ firebase emulators:start --only auth,firestore
 Auth Emulatorは`127.0.0.1:9099`、Firestore Emulatorは
 `127.0.0.1:8080`を使用します。
 
-## 11. Firebase Hostingへのデプロイ
+## 12. Firebase Hostingへのデプロイ
 
 初回だけFirebase CLIへログインし、対象プロジェクトを関連付けます。
 
@@ -314,7 +343,16 @@ npm run check:deploy
 npm test
 npm run test:rules
 npm run build
-firebase deploy --only firestore:rules,firestore:indexes,hosting
+```
+
+新しい保存先や保存形式を使うリリースでは、旧Rulesによる権限拒否を避けるため、
+必ずRulesを先に反映してからHostingを反映します。`.firebaserc`を置いていない
+環境では、誤ったFirebaseプロジェクトへのデプロイを避けるため`--project`を
+省略しないでください。
+
+```bash
+firebase deploy --only firestore:rules,firestore:indexes --project <project-id>
+firebase deploy --only hosting --project <project-id>
 ```
 
 デプロイ後に確認する項目:

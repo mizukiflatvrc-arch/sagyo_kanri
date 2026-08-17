@@ -99,8 +99,6 @@ export function createEmptySessionFormValues(
     libraryId: "",
     enteredAt: dateTime,
     exitedAt: dateTime,
-    actualWorkHours: "0",
-    actualWorkMinutes: "0",
     concentrationScore: 5,
     anxietyScore: 5,
     fatigueScore: 5,
@@ -118,14 +116,10 @@ export function createEmptySessionFormValues(
 export function sessionToFormValues(
   session: LibrarySession,
 ): SessionFormValues {
-  const actualWork = minutesToParts(session.actualWorkMinutes);
-
   return {
     libraryId: session.libraryId,
     enteredAt: toJstDateTimeLocal(session.enteredAt),
     exitedAt: toJstDateTimeLocal(session.exitedAt),
-    actualWorkHours: String(actualWork.hours),
-    actualWorkMinutes: String(actualWork.minutes),
     concentrationScore: session.concentrationScore,
     anxietyScore: session.anxietyScore,
     fatigueScore: session.fatigueScore,

@@ -90,6 +90,26 @@ export function SessionEditorPage() {
 
   const handleSubmit = async (values: EditableLibrarySessionFields) => {
     if (!user) return;
+    if (
+      target?.selfCriticismMinutes !== undefined &&
+      values.stayMinutes < target.selfCriticismMinutes
+    ) {
+      showToast(
+        "滞在時間は過去形式で保存された自己否定時間以上にしてください。",
+        "error",
+      );
+      return;
+    }
+    if (
+      target?.actualWorkMinutes !== undefined &&
+      values.stayMinutes < target.actualWorkMinutes
+    ) {
+      showToast(
+        "滞在時間は保存済みの実作業時間以上にしてください。",
+        "error",
+      );
+      return;
+    }
     setIsSaving(true);
     try {
       if (isEdit && sessionId) {

@@ -75,13 +75,15 @@ export function SessionCard({
           </dt>
           <dd>{formatMinutes(session.stayMinutes)}</dd>
         </div>
-        <div className="session-card__duration">
-          <dt>
-            <Timer aria-hidden="true" size={16} />
-            実作業
-          </dt>
-          <dd>{formatMinutes(session.actualWorkMinutes)}</dd>
-        </div>
+        {session.actualWorkMinutes !== undefined ? (
+          <div className="session-card__duration">
+            <dt>
+              <Timer aria-hidden="true" size={16} />
+              実作業
+            </dt>
+            <dd>{formatMinutes(session.actualWorkMinutes)}</dd>
+          </div>
+        ) : null}
       </dl>
 
       <dl className="session-card__scores" aria-label="作業時のスコア">

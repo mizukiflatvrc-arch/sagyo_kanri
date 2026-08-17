@@ -44,18 +44,34 @@ service cloud.firestore {
       return data.keys().hasAny(["archivedAt"]);
     }
 
-    function hasLegacySelfCriticismMinutes(data) {
+    function hasActualWorkMinutes(data) {
+      return data.keys().hasAny(["actualWorkMinutes"]);
+    }
+
+    function preservesActualWorkMinutes(before, after) {
+      return (
+          !hasActualWorkMinutes(before)
+          && !hasActualWorkMinutes(after)
+        )
+        || (
+          hasActualWorkMinutes(before)
+          && hasActualWorkMinutes(after)
+          && after.actualWorkMinutes == before.actualWorkMinutes
+        );
+    }
+
+    function hasSelfCriticismMinutes(data) {
       return data.keys().hasAny(["selfCriticismMinutes"]);
     }
 
-    function preservesLegacySelfCriticismMinutes(before, after) {
+    function preservesSelfCriticismMinutes(before, after) {
       return (
-          !hasLegacySelfCriticismMinutes(before)
-          && !hasLegacySelfCriticismMinutes(after)
+          !hasSelfCriticismMinutes(before)
+          && !hasSelfCriticismMinutes(after)
         )
         || (
-          hasLegacySelfCriticismMinutes(before)
-          && hasLegacySelfCriticismMinutes(after)
+          hasSelfCriticismMinutes(before)
+          && hasSelfCriticismMinutes(after)
           && after.selfCriticismMinutes == before.selfCriticismMinutes
         );
     }
@@ -149,6 +165,37 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function isValidActiveSession(data, userId) {
+      return data.keys().hasAll([
+          "userId",
+          "enteredAt",
+          "createdAt",
+          "updatedAt"
+        ])
+        && data.keys().hasOnly([
+          "userId",
+          "enteredAt",
+          "exitStartedAt",
+          "createdAt",
+          "updatedAt"
+        ])
+        && data.userId == userId
+        && data.enteredAt is timestamp
+        && data.get("exitStartedAt", request.time) is timestamp
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isExitStart() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return !resource.data.keys().hasAny(["exitStartedAt"])
+        && request.resource.data.keys().hasAll(["exitStartedAt"])
+        && request.resource.data.exitStartedAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && changed.hasAll(["exitStartedAt"])
+        && changed.hasOnly(["exitStartedAt", "updatedAt"]);
+    }
+
     function isValidSession(data, userId) {
       return data.keys().hasAll([
           "userId",
@@ -156,7 +203,6 @@ service cloud.firestore {
           "enteredAt",
           "exitedAt",
           "stayMinutes",
-          "actualWorkMinutes",
           "concentrationScore",
           "anxietyScore",
           "fatigueScore",
@@ -183,8 +229,8 @@ service cloud.firestore {
           "anxietyScore",
           "fatigueScore",
           "selfCriticismScore",
-          // Read-only compatibility field on records created before the
-          // proportion score was introduced.
+          // Optional minute value used by time-card sessions and retained
+          // unchanged when an existing session is edited.
           "selfCriticismMinutes",
           "plannedTaskCreated",
           "plannedTaskText",
@@ -206,9 +252,9 @@ service cloud.firestore {
         && data.exitedAt > data.enteredAt
         && data.stayMinutes is int
         && data.stayMinutes > 0
-        && data.actualWorkMinutes is int
-        && data.actualWorkMinutes >= 0
-        && data.actualWorkMinutes <= data.stayMinutes
+        && data.get("actualWorkMinutes", 0) is int
+        && data.get("actualWorkMinutes", 0) >= 0
+        && data.get("actualWorkMinutes", 0) <= data.stayMinutes
         && isValidScore(data.concentrationScore)
         && isValidScore(data.anxietyScore)
         && isValidScore(data.fatigueScore)
@@ -352,11 +398,31 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /users/{userId}/activeSession/current {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+                    && isValidActiveSession(
+                      request.resource.data,
+                      userId
+                    )
+                    && !request.resource.data.keys()
+                      .hasAny(["exitStartedAt"])
+                    && request.resource.data.enteredAt == request.time
+                    && request.resource.data.createdAt == request.time
+                    && request.resource.data.updatedAt == request.time;
+      allow update: if isOwner(userId)
+                    && isValidActiveSession(
+                      request.resource.data,
+                      userId
+                    )
+                    && isExitStart();
+      allow delete: if isOwner(userId);
+    }
+
     match /users/{userId}/sessions/{sessionId} {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId)
                     && isValidSession(request.resource.data, userId)
-                    && !hasLegacySelfCriticismMinutes(request.resource.data)
                     && isNotDeleting(request.resource.data)
                     && request.resource.data.version == 1
                     && request.resource.data.createdAt == request.time
@@ -375,7 +441,11 @@ service cloud.firestore {
                           == resource.data.userId
                         && request.resource.data.createdAt
                           == resource.data.createdAt
-                        && preservesLegacySelfCriticismMinutes(
+                        && preservesActualWorkMinutes(
+                          resource.data,
+                          request.resource.data
+                        )
+                        && preservesSelfCriticismMinutes(
                           resource.data,
                           request.resource.data
                         )

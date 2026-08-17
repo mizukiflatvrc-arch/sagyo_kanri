@@ -21,14 +21,13 @@ import { ExportPage } from "./ExportPage";
   .IS_REACT_ACT_ENVIRONMENT = true;
 
 const RECORD: ExportSessionRecord = {
-  enteredAt: new Date("2026-07-28T01:15:00.000Z"),
-  exitedAt: new Date("2026-07-28T03:30:00.000Z"),
+  enteredAt: new Date("2026-08-10T01:15:00.000Z"),
+  exitedAt: new Date("2026-08-10T03:30:00.000Z"),
   stayMinutes: 135,
-  actualWorkMinutes: 100,
   concentrationScore: 7,
   anxietyScore: 4,
   fatigueScore: 6,
-  selfCriticismScore: 2,
+  selfCriticismScore: 3,
 };
 
 function buttonByText(container: HTMLElement, text: string) {
@@ -116,8 +115,19 @@ describe("ExportPage", () => {
     );
     expect(table).not.toBeNull();
     expect(table?.querySelector("th")?.textContent).toBe("作業日");
-    expect(table?.textContent).toContain("07/28");
+    expect(table?.textContent).toContain("08/10");
     expect(table?.textContent).toContain("10:15");
+    expect(table?.querySelectorAll("th")).toHaveLength(8);
+    expect(table?.textContent).not.toContain("実作業時間");
+    expect(table?.querySelector("th:last-child")?.textContent).toBe(
+      "自己否定割合（0～10）",
+    );
+
+    const printTable = container.querySelector<HTMLTableElement>(
+      ".print-report__table",
+    );
+    expect(printTable?.querySelectorAll("th")).toHaveLength(8);
+    expect(printTable?.textContent).not.toContain("実作業時間");
     expect(container.querySelector(".export-copy-fallback")).toBeNull();
   });
 

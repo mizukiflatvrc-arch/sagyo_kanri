@@ -43,6 +43,15 @@ function validLibraryDocument(userId: string) {
   };
 }
 
+function validActiveSessionDocument(userId: string) {
+  return {
+    userId,
+    enteredAt: serverTimestamp(),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+}
+
 function validSessionDocument(userId: string) {
   return {
     userId,
@@ -89,6 +98,7 @@ let testEnvironment: RulesTestEnvironment;
 function protectedDocumentPaths(uid: string) {
   return [
     `users/${uid}/libraries/library-1`,
+    `users/${uid}/activeSession/current`,
     `users/${uid}/sessions/session-1`,
     `users/${uid}/sessions/session-1/revisions/1`,
   ] as const;
@@ -106,6 +116,10 @@ async function seedProtectedDocuments(uid: string) {
     await setDoc(
       doc(firestore, `users/${uid}/libraries/library-1`),
       validLibraryDocument(uid),
+    );
+    await setDoc(
+      doc(firestore, `users/${uid}/activeSession/current`),
+      validActiveSessionDocument(uid),
     );
     const sessionReference = doc(
       firestore,
@@ -144,6 +158,17 @@ async function assertProtectedWritesFail(
     setDoc(
       doc(firestore, `users/${targetUid}/sessions/session-new`),
       validSessionDocument(targetUid),
+    ),
+  );
+  await assertFails(
+    setDoc(
+      doc(firestore, `users/${targetUid}/activeSession/current`),
+      validActiveSessionDocument(targetUid),
+    ),
+  );
+  await assertFails(
+    deleteDoc(
+      doc(firestore, `users/${targetUid}/activeSession/current`),
     ),
   );
 
@@ -212,6 +237,152 @@ describe("Firestore security rules", () => {
       await assertFails(getDoc(reference));
     }
     await assertProtectedWritesFail(firestore, OTHER_UID);
+  });
+
+  it("本人だけがactiveSession/currentを作成・参照・退出開始・削除できる", async () => {
+    const firestore = testEnvironment
+      .authenticatedContext(OWNER_UID)
+      .firestore();
+    const reference = doc(
+      firestore,
+      `users/${OWNER_UID}/activeSession/current`,
+    );
+
+    await assertSucceeds(
+      setDoc(reference, validActiveSessionDocument(OWNER_UID)),
+    );
+    await assertSucceeds(getDoc(reference));
+    await assertSucceeds(
+      setDoc(
+        reference,
+        {
+          exitStartedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      ),
+    );
+    await assertSucceeds(deleteDoc(reference));
+  });
+
+  it("activeSessionはcurrent以外のドキュメントIDを拒否する", async () => {
+    const firestore = testEnvironment
+      .authenticatedContext(OWNER_UID)
+      .firestore();
+    const reference = doc(
+      firestore,
+      `users/${OWNER_UID}/activeSession/not-current`,
+    );
+    await seedDocument(reference.path);
+
+    await assertFails(getDoc(reference));
+    await assertFails(
+      setDoc(reference, validActiveSessionDocument(OWNER_UID)),
+    );
+    await assertFails(deleteDoc(reference));
+  });
+
+  it("activeSessionは所有者・キー・Timestamp・作成時刻を検証する", async () => {
+    const firestore = testEnvironment
+      .authenticatedContext(OWNER_UID)
+      .firestore();
+    const reference = doc(
+      firestore,
+      `users/${OWNER_UID}/activeSession/current`,
+    );
+    const active = validActiveSessionDocument(OWNER_UID);
+    const withoutEnteredAt: Record<string, unknown> = { ...active };
+    delete withoutEnteredAt.enteredAt;
+
+    await assertFails(setDoc(reference, withoutEnteredAt));
+    await assertFails(
+      setDoc(reference, {
+        ...active,
+        userId: OTHER_UID,
+      }),
+    );
+    await assertFails(
+      setDoc(reference, {
+        ...active,
+        unexpected: true,
+      }),
+    );
+    await assertFails(
+      setDoc(reference, {
+        ...active,
+        enteredAt: "2026-07-23T00:00:00.000Z",
+      }),
+    );
+    await assertFails(
+      setDoc(reference, {
+        ...active,
+        createdAt: 1,
+      }),
+    );
+    await assertFails(
+      setDoc(reference, {
+        ...active,
+        updatedAt: null,
+      }),
+    );
+    await assertFails(
+      setDoc(reference, {
+        ...active,
+        enteredAt: Timestamp.fromDate(
+          new Date("2026-07-23T00:00:00.000Z"),
+        ),
+      }),
+    );
+    await assertFails(
+      setDoc(reference, {
+        ...active,
+        exitStartedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it("exitStartedAtはTimestampで一度だけ追加でき、上書きできない", async () => {
+    const firestore = testEnvironment
+      .authenticatedContext(OWNER_UID)
+      .firestore();
+    const reference = doc(
+      firestore,
+      `users/${OWNER_UID}/activeSession/current`,
+    );
+
+    await assertSucceeds(
+      setDoc(reference, validActiveSessionDocument(OWNER_UID)),
+    );
+    await assertFails(
+      setDoc(
+        reference,
+        {
+          exitStartedAt: "2026-07-23T02:00:00.000Z",
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      ),
+    );
+    await assertSucceeds(
+      setDoc(
+        reference,
+        {
+          exitStartedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      ),
+    );
+    await assertFails(
+      setDoc(
+        reference,
+        {
+          exitStartedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      ),
+    );
   });
 
   it("認証済みの本人は libraries、sessions、revisions を利用できる", async () => {
@@ -296,6 +467,229 @@ describe("Firestore security rules", () => {
         { merge: true },
       ),
     );
+  });
+
+  it("actualWorkMinutesは省略でき、存在する場合は整数の範囲を検証する", async () => {
+    const firestore = testEnvironment
+      .authenticatedContext(OWNER_UID)
+      .firestore();
+    const libraryReference = doc(
+      firestore,
+      `users/${OWNER_UID}/libraries/library-1`,
+    );
+    const withoutActualWork: Record<string, unknown> = {
+      ...validSessionDocument(OWNER_UID),
+      selfCriticismMinutes: 30,
+    };
+    delete withoutActualWork.actualWorkMinutes;
+
+    await assertSucceeds(
+      setDoc(libraryReference, validLibraryDocument(OWNER_UID)),
+    );
+    await assertSucceeds(
+      setDoc(
+        doc(firestore, `users/${OWNER_UID}/sessions/without-actual-work`),
+        withoutActualWork,
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(firestore, `users/${OWNER_UID}/sessions/null-actual-work`),
+        {
+          ...validSessionDocument(OWNER_UID),
+          actualWorkMinutes: null,
+        },
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(firestore, `users/${OWNER_UID}/sessions/negative-actual-work`),
+        {
+          ...validSessionDocument(OWNER_UID),
+          actualWorkMinutes: -1,
+        },
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(firestore, `users/${OWNER_UID}/sessions/too-long-actual-work`),
+        {
+          ...validSessionDocument(OWNER_UID),
+          actualWorkMinutes: 121,
+        },
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(firestore, `users/${OWNER_UID}/sessions/invalid-self-criticism`),
+        {
+          ...withoutActualWork,
+          selfCriticismMinutes: 121,
+        },
+      ),
+    );
+  });
+
+  it("既存の実作業時間と自己否定時間は更新時に同値で保持する", async () => {
+    const firestore = testEnvironment
+      .authenticatedContext(OWNER_UID)
+      .firestore();
+    const libraryReference = doc(
+      firestore,
+      `users/${OWNER_UID}/libraries/library-1`,
+    );
+    const sessionReference = doc(
+      firestore,
+      `users/${OWNER_UID}/sessions/session-1`,
+    );
+
+    await assertSucceeds(
+      setDoc(libraryReference, validLibraryDocument(OWNER_UID)),
+    );
+    await assertSucceeds(
+      setDoc(sessionReference, {
+        ...validSessionDocument(OWNER_UID),
+        selfCriticismMinutes: 30,
+      }),
+    );
+
+    const beforeNoteUpdate = (await getDoc(sessionReference)).data() ?? {};
+    const noteBatch = writeBatch(firestore);
+    noteBatch.set(
+      doc(
+        firestore,
+        `users/${OWNER_UID}/sessions/session-1/revisions/1`,
+      ),
+      validRevisionDocument("session-1", 1, beforeNoteUpdate),
+    );
+    noteBatch.update(sessionReference, {
+      note: "互換フィールドを保持して更新",
+      version: 2,
+      updatedAt: serverTimestamp(),
+    });
+    await assertSucceeds(noteBatch.commit());
+
+    const beforeActualWorkChange =
+      (await getDoc(sessionReference)).data() ?? {};
+    const actualWorkBatch = writeBatch(firestore);
+    actualWorkBatch.set(
+      doc(
+        firestore,
+        `users/${OWNER_UID}/sessions/session-1/revisions/2`,
+      ),
+      validRevisionDocument(
+        "session-1",
+        2,
+        beforeActualWorkChange,
+        ["actualWorkMinutes"],
+      ),
+    );
+    actualWorkBatch.update(sessionReference, {
+      actualWorkMinutes: 70,
+      version: 3,
+      updatedAt: serverTimestamp(),
+    });
+    await assertFails(actualWorkBatch.commit());
+
+    const selfCriticismBatch = writeBatch(firestore);
+    selfCriticismBatch.set(
+      doc(
+        firestore,
+        `users/${OWNER_UID}/sessions/session-1/revisions/2`,
+      ),
+      validRevisionDocument(
+        "session-1",
+        2,
+        beforeActualWorkChange,
+        ["selfCriticismMinutes"],
+      ),
+    );
+    selfCriticismBatch.update(sessionReference, {
+      selfCriticismMinutes: 20,
+      version: 3,
+      updatedAt: serverTimestamp(),
+    });
+    await assertFails(selfCriticismBatch.commit());
+  });
+
+  it("セッション作成とactiveSession削除を同じatomic writeで許可する", async () => {
+    const firestore = testEnvironment
+      .authenticatedContext(OWNER_UID)
+      .firestore();
+    const libraryReference = doc(
+      firestore,
+      `users/${OWNER_UID}/libraries/library-1`,
+    );
+    const activeReference = doc(
+      firestore,
+      `users/${OWNER_UID}/activeSession/current`,
+    );
+    const sessionReference = doc(
+      firestore,
+      `users/${OWNER_UID}/sessions/from-active`,
+    );
+    const session: Record<string, unknown> = {
+      ...validSessionDocument(OWNER_UID),
+      selfCriticismMinutes: 30,
+    };
+    delete session.actualWorkMinutes;
+
+    await assertSucceeds(
+      setDoc(libraryReference, validLibraryDocument(OWNER_UID)),
+    );
+    await assertSucceeds(
+      setDoc(activeReference, validActiveSessionDocument(OWNER_UID)),
+    );
+
+    const batch = writeBatch(firestore);
+    batch.set(sessionReference, session);
+    batch.delete(activeReference);
+    await assertSucceeds(batch.commit());
+
+    const activeAfter = await getDoc(activeReference);
+    const sessionAfter = await getDoc(sessionReference);
+    if (activeAfter.exists() || !sessionAfter.exists()) {
+      throw new Error("atomic write後の文書状態が不正です");
+    }
+  });
+
+  it("atomic writeのセッションが不正ならactiveSession削除も拒否する", async () => {
+    const firestore = testEnvironment
+      .authenticatedContext(OWNER_UID)
+      .firestore();
+    const libraryReference = doc(
+      firestore,
+      `users/${OWNER_UID}/libraries/library-1`,
+    );
+    const activeReference = doc(
+      firestore,
+      `users/${OWNER_UID}/activeSession/current`,
+    );
+    const sessionReference = doc(
+      firestore,
+      `users/${OWNER_UID}/sessions/invalid-from-active`,
+    );
+
+    await assertSucceeds(
+      setDoc(libraryReference, validLibraryDocument(OWNER_UID)),
+    );
+    await assertSucceeds(
+      setDoc(activeReference, validActiveSessionDocument(OWNER_UID)),
+    );
+
+    const batch = writeBatch(firestore);
+    batch.set(sessionReference, {
+      ...validSessionDocument(OWNER_UID),
+      unexpected: true,
+    });
+    batch.delete(activeReference);
+    await assertFails(batch.commit());
+
+    const activeAfter = await getDoc(activeReference);
+    const sessionAfter = await getDoc(sessionReference);
+    if (!activeAfter.exists() || sessionAfter.exists()) {
+      throw new Error("失敗したatomic writeが一部だけ反映されています");
+    }
   });
 
   it("deletingにはboolean以外を保存できない", async () => {
@@ -784,7 +1178,7 @@ describe("Firestore security rules", () => {
     );
   });
 
-  it("旧自己否定時間の記録は新しい割合スコアの追加で移行できる", async () => {
+  it("自己否定時間を保持した旧記録を移行でき、新規記録にも保存できる", async () => {
     const firestore = testEnvironment
       .authenticatedContext(OWNER_UID)
       .firestore();
@@ -842,7 +1236,7 @@ describe("Firestore security rules", () => {
         oldSession,
       ),
     );
-    await assertFails(
+    await assertSucceeds(
       setDoc(
         doc(firestore, `users/${OWNER_UID}/sessions/mixed-format-new`),
         {

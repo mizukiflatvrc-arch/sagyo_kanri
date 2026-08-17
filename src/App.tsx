@@ -14,6 +14,7 @@ import { LibrariesPage } from "./pages/LibrariesPage";
 import { LibraryEditorPage } from "./pages/LibraryEditorPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { ExportPage } from "./pages/ExportPage";
+import { ActiveSessionReportPage } from "./pages/ActiveSessionReportPage";
 
 export function App() {
   const { user, isLoading, isConfigured } = useAuth();
@@ -34,6 +35,10 @@ export function App() {
           <Route index element={<DashboardPage />} />
           <Route path="sessions" element={<SessionsPage />} />
           <Route path="sessions/new" element={<SessionEditorPage />} />
+          <Route
+            path="sessions/active/report"
+            element={<ActiveSessionReportPage />}
+          />
           <Route path="sessions/:sessionId" element={<SessionDetailPage />} />
           <Route
             path="sessions/:sessionId/edit"

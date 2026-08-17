@@ -29,12 +29,15 @@ export interface LibrarySession {
   enteredAt: Date;
   exitedAt: Date;
   stayMinutes: number;
-  actualWorkMinutes: number;
+  /** Retained only for records created before time-card based entry. */
+  actualWorkMinutes?: number;
 
   concentrationScore: number;
   anxietyScore: number;
   fatigueScore: number;
   selfCriticismScore: number;
+  /** Legacy minute value retained only for backward compatibility. */
+  selfCriticismMinutes?: number;
 
   plannedTaskCreated: boolean;
   plannedTaskText: string;
@@ -54,12 +57,21 @@ export interface LibrarySession {
 
 export type CreateLibrarySessionInput = Omit<
   LibrarySession,
-  "id" | "isLegacyEncrypted" | "createdAt" | "updatedAt"
+  | "id"
+  | "selfCriticismMinutes"
+  | "isLegacyEncrypted"
+  | "createdAt"
+  | "updatedAt"
 >;
 
 export type EditableLibrarySessionFields = Omit<
   LibrarySession,
-  "id" | "userId" | "isLegacyEncrypted" | "createdAt" | "updatedAt"
+  | "id"
+  | "userId"
+  | "selfCriticismMinutes"
+  | "isLegacyEncrypted"
+  | "createdAt"
+  | "updatedAt"
 >;
 
 export interface Library {
@@ -113,8 +125,6 @@ export interface SessionFormValues {
   enteredAt: string;
   exitedAt: string;
 
-  actualWorkHours: string;
-  actualWorkMinutes: string;
   concentrationScore: number;
   anxietyScore: number;
   fatigueScore: number;
@@ -159,7 +169,6 @@ export interface ParsedSessionFormValues {
   enteredAt: Date;
   exitedAt: Date;
   stayMinutes: number;
-  actualWorkMinutes: number;
   concentrationScore: number;
   anxietyScore: number;
   fatigueScore: number;

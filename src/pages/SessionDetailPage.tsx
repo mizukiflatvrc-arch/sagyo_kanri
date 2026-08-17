@@ -164,10 +164,12 @@ export function SessionDetailPage() {
                 <dt>滞在時間</dt>
                 <dd>{formatMinutes(session.stayMinutes)}</dd>
               </div>
-              <div className="detail-item">
-                <dt>実作業時間</dt>
-                <dd>{formatMinutes(session.actualWorkMinutes)}</dd>
-              </div>
+              {session.actualWorkMinutes !== undefined ? (
+                <div className="detail-item">
+                  <dt>実作業時間</dt>
+                  <dd>{formatMinutes(session.actualWorkMinutes)}</dd>
+                </div>
+              ) : null}
             </dl>
           </section>
 

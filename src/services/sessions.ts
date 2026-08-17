@@ -85,7 +85,9 @@ function changedFields(
   after: EditableLibrarySessionFields,
 ): Array<keyof EditableLibrarySessionFields> {
   return EDITABLE_KEYS.filter(
-    (key) => comparableValue(before[key]) !== comparableValue(after[key]),
+    (key) =>
+      Object.prototype.hasOwnProperty.call(after, key) &&
+      comparableValue(before[key]) !== comparableValue(after[key]),
   );
 }
 
@@ -133,16 +135,16 @@ export async function getSessionsForExport(
     .filter((document) => document.data().deleting !== true)
     .map((document) => {
       const data = document.data();
-      return {
+      const record: ExportSessionRecord = {
         enteredAt: exportDate(data.enteredAt),
         exitedAt: exportDate(data.exitedAt),
         stayMinutes: exportNumber(data.stayMinutes),
-        actualWorkMinutes: exportNumber(data.actualWorkMinutes),
         concentrationScore: exportNumber(data.concentrationScore),
         anxietyScore: exportNumber(data.anxietyScore),
         fatigueScore: exportNumber(data.fatigueScore),
         selfCriticismScore: selfCriticismScoreFromData(data),
       };
+      return record;
     });
 }
 
@@ -269,7 +271,6 @@ export async function updateNextDayReaction(
       enteredAt: current.enteredAt,
       exitedAt: current.exitedAt,
       stayMinutes: current.stayMinutes,
-      actualWorkMinutes: current.actualWorkMinutes,
       concentrationScore: current.concentrationScore,
       anxietyScore: current.anxietyScore,
       fatigueScore: current.fatigueScore,

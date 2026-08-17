@@ -495,6 +495,143 @@ h3 {
   background: #fffdf8;
 }
 
+.timecard-card__status {
+  margin-bottom: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+
+.timecard-entry-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.timecard-primary-button {
+  min-height: 54px;
+  padding: 0.85rem 1.25rem;
+  font-size: 1rem;
+}
+
+.active-session-card {
+  min-height: 208px;
+  padding: clamp(22px, 4vw, 34px);
+  border-color: #a9c1b5;
+  background:
+    linear-gradient(145deg, rgba(227, 238, 232, 0.96), rgba(255, 253, 248, 0.98)),
+    var(--surface);
+}
+
+.active-session-card__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.active-session-card__header h2,
+.active-session-card__header p {
+  margin-bottom: 0;
+}
+
+.active-session-card__header .timecard-card__status {
+  color: var(--forest);
+}
+
+.active-session-card__indicator {
+  width: 13px;
+  height: 13px;
+  border: 3px solid #d7e7de;
+  border-radius: 50%;
+  background: var(--forest);
+  box-shadow: 0 0 0 4px rgba(49, 93, 80, 0.09);
+}
+
+.active-session-card__times {
+  display: flex;
+  margin: 18px 0;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+}
+
+.active-session-card__times div {
+  display: grid;
+  gap: 2px;
+}
+
+.active-session-card__times dt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-faint);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.active-session-card__times dd {
+  margin: 0;
+  color: var(--forest-deep);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.active-session-card__warning,
+.active-session-card__hint {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 0.78rem;
+}
+
+.active-session-card__warning {
+  color: #754b2e;
+  background: var(--ochre-soft);
+}
+
+.active-session-card__hint {
+  color: var(--forest-deep);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.active-session-card__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.timecard-secondary-action {
+  display: flex;
+  margin: -17px 0 30px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--ink-faint);
+  font-size: 0.76rem;
+}
+
+.timecard-unavailable-card {
+  display: flex;
+  min-height: 208px;
+  padding: clamp(22px, 4vw, 34px);
+  align-items: center;
+  gap: 16px;
+  color: var(--ink-soft);
+}
+
+.timecard-unavailable-card > svg {
+  color: var(--ochre);
+}
+
+.timecard-unavailable-card h2 {
+  margin-bottom: 0.35rem;
+  color: var(--ink);
+}
+
+.timecard-unavailable-card p {
+  margin: 0;
+}
+
 .pending-card {
   display: flex;
   min-height: 208px;
@@ -1523,8 +1660,19 @@ h3 {
   }
 
   .welcome-card,
-  .pending-card {
+  .pending-card,
+  .active-session-card,
+  .timecard-unavailable-card {
     min-height: auto;
+  }
+
+  .active-session-card__actions,
+  .active-session-card__actions .button {
+    width: 100%;
+  }
+
+  .timecard-secondary-action {
+    margin-top: 0;
   }
 
   .pending-card {

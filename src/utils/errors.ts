@@ -8,8 +8,20 @@ const FRIENDLY_FIREBASE_MESSAGES: Record<string, string> = {
   unavailable: "現在サービスに接続できません。少し時間をおいてお試しください。",
 };
 
+const USER_FACING_ERROR_NAMES = new Set([
+  "ConcurrentEditError",
+  "ActiveSessionAlreadyExistsError",
+  "ActiveSessionNotFoundError",
+  "ActiveSessionNotReadyError",
+  "ActiveSessionChangedError",
+  "InvalidActiveSessionDataError",
+]);
+
 export function toUserMessage(error: unknown): string {
-  if (error instanceof Error && error.name === "ConcurrentEditError") {
+  if (
+    error instanceof Error &&
+    USER_FACING_ERROR_NAMES.has(error.name)
+  ) {
     return error.message;
   }
 

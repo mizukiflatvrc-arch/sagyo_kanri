@@ -105,21 +105,6 @@ export function validateSessionForm(
     }
   }
 
-  const actualWorkMinutes = parseDurationParts(
-    values.actualWorkHours,
-    values.actualWorkMinutes,
-  );
-  if (actualWorkMinutes === null) {
-    errors.actualWorkMinutes =
-      "実作業時間は0以上の時間と0〜59の分で入力してください";
-  } else if (
-    stayMinutes !== null &&
-    stayMinutes > 0 &&
-    actualWorkMinutes > stayMinutes
-  ) {
-    errors.actualWorkMinutes = "実作業時間は滞在時間以内にしてください";
-  }
-
   validateScore(
     values.concentrationScore,
     "concentrationScore",
@@ -205,15 +190,10 @@ export function parseSessionForm(
 
   const enteredAt = fromJstDateTimeLocal(values.enteredAt);
   const exitedAt = fromJstDateTimeLocal(values.exitedAt);
-  const actualWorkMinutes = parseDurationParts(
-    values.actualWorkHours,
-    values.actualWorkMinutes,
-  );
 
   if (
     enteredAt === null ||
-    exitedAt === null ||
-    actualWorkMinutes === null
+    exitedAt === null
   ) {
     return null;
   }
@@ -223,7 +203,6 @@ export function parseSessionForm(
     enteredAt,
     exitedAt,
     stayMinutes: differenceInMinutes(enteredAt, exitedAt),
-    actualWorkMinutes,
     concentrationScore: values.concentrationScore,
     anxietyScore: values.anxietyScore,
     fatigueScore: values.fatigueScore,
