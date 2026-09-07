@@ -11,6 +11,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { useData } from "../contexts/DataContext";
 import { useToast } from "../contexts/ToastContext";
+import { LegacyTaskPlan } from "../components/LegacyTaskPlan";
 import { PageHeader } from "../components/PageHeader";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import {
@@ -21,7 +22,6 @@ import { ErrorState, LoadingState } from "../components/States";
 import { deleteSession } from "../services/sessions";
 import { formatJstDate, formatJstDateTime } from "../utils/date";
 import {
-  COMPLETION_STATUS_LABELS,
   NEXT_DAY_REACTION_LABELS,
   formatMinutes,
 } from "../utils/format";
@@ -196,26 +196,16 @@ export function SessionDetailPage() {
           </section>
 
           <section className="detail-section">
-            <h2>予定と実際の作業</h2>
+            <h2>取り組んだこと</h2>
             <dl className="detail-list">
-              <div className="detail-item">
-                <dt>開始時に予定タスクを設定</dt>
-                <dd>{session.plannedTaskCreated ? "はい" : "いいえ"}</dd>
-              </div>
-              <div className="detail-item">
-                <dt>終了状況</dt>
-                <dd>{COMPLETION_STATUS_LABELS[session.completionStatus]}</dd>
-              </div>
               <div className="detail-item detail-item--wide">
-                <dt>予定タスク</dt>
-                <dd>{textOrDash(session.plannedTaskText)}</dd>
-              </div>
-              <div className="detail-item detail-item--wide">
-                <dt>実際に行った作業</dt>
+                <dt>今日やったこと</dt>
                 <dd>{textOrDash(session.actualTaskText)}</dd>
               </div>
             </dl>
           </section>
+
+          <LegacyTaskPlan session={session} />
 
           <section className="detail-section">
             <h2>翌日の状態とメモ</h2>

@@ -13,15 +13,13 @@ import type {
   SessionFormValues,
 } from "../types";
 import { differenceInMinutes, fromJstDateTimeLocal } from "../utils/date";
-import {
-  COMPLETION_STATUS_OPTIONS,
-  formatMinutes,
-} from "../utils/format";
+import { formatMinutes } from "../utils/format";
 import {
   hasValidationErrors,
   parseSessionForm,
   validateSessionForm,
 } from "../utils/validation";
+import { LegacyTaskPlan } from "./LegacyTaskPlan";
 import { ScoreField } from "./ScoreField";
 import { useUnsavedChanges } from "../hooks/useUnsavedChanges";
 
@@ -117,10 +115,7 @@ export function SessionForm({
   const anxietyId = `${formId}-anxiety`;
   const fatigueId = `${formId}-fatigue`;
   const selfCriticismId = `${formId}-self-criticism`;
-  const plannedTaskId = `${formId}-planned-task`;
-  const plannedTaskTextId = `${formId}-planned-task-text`;
   const actualTaskTextId = `${formId}-actual-task-text`;
-  const completionStatusId = `${formId}-completion-status`;
   const noteId = `${formId}-note`;
 
   return (
@@ -318,141 +313,31 @@ export function SessionForm({
       </fieldset>
 
       <fieldset className="form-section" disabled={isSaving}>
-        <legend>タスク</legend>
-
-        <div className="form-grid form-grid--single">
-        <div
-          className="field choice-group"
-          role="group"
-          aria-labelledby={`${plannedTaskId}-label`}
-          aria-describedby={
-            errors.plannedTaskCreated
-              ? `${plannedTaskId}-error`
-              : undefined
-          }
-        >
-          <p
-            className="field-label form-label"
-            id={`${plannedTaskId}-label`}
-          >
-            開始時に予定タスクを設定できましたか
-          </p>
-          <div className="choice-grid choice-list choice-list--inline">
-            <div className="choice-card choice-option">
-              <input
-                id={`${plannedTaskId}-yes`}
-                type="radio"
-                name="plannedTaskCreated"
-                value="yes"
-                checked={values.plannedTaskCreated}
-                onChange={() => updateField("plannedTaskCreated", true)}
-              />
-              <label htmlFor={`${plannedTaskId}-yes`}>
-                はい
-              </label>
-            </div>
-            <div className="choice-card choice-option">
-              <input
-                id={`${plannedTaskId}-no`}
-                type="radio"
-                name="plannedTaskCreated"
-                value="no"
-                checked={!values.plannedTaskCreated}
-                onChange={() => updateField("plannedTaskCreated", false)}
-              />
-              <label htmlFor={`${plannedTaskId}-no`}>
-                いいえ
-              </label>
-            </div>
-          </div>
-          {errors.plannedTaskCreated && (
-            <p className="field-error" id={`${plannedTaskId}-error`}>
-              {errors.plannedTaskCreated}
-            </p>
-          )}
-        </div>
-
-        <div className="field form-field">
-          <label
-            className="field-label form-label"
-            htmlFor={plannedTaskTextId}
-          >
-            予定タスク内容
-            <span className="optional-label">（任意）</span>
-          </label>
-          <textarea
-            className="textarea"
-            id={plannedTaskTextId}
-            name="plannedTaskText"
-            value={values.plannedTaskText}
-            onChange={(event) =>
-              updateField("plannedTaskText", event.target.value)
-            }
-            rows={3}
-          />
-        </div>
-
-        <div className="field form-field">
-          <label
-            className="field-label form-label"
-            htmlFor={actualTaskTextId}
-          >
-            実際に行った作業
-            <span className="optional-label">（任意）</span>
-          </label>
-          <textarea
-            className="textarea"
-            id={actualTaskTextId}
-            name="actualTaskText"
-            value={values.actualTaskText}
-            onChange={(event) =>
-              updateField("actualTaskText", event.target.value)
-            }
-            rows={4}
-          />
-        </div>
-        </div>
-      </fieldset>
-
-      <fieldset className="form-section" disabled={isSaving}>
-        <legend>終了状況</legend>
-        <p
-          className="form-section__hint field-help field-hint"
-          id={`${completionStatusId}-hint`}
-        >
-          当初の予定と比べて、近いものを選んでください。
+        <legend>取り組んだこと</legend>
+        <p className="field-help">
+          予定を決めていなくても大丈夫です。そのとき取り組んだことを自由に残せます。空欄でも保存できます。
         </p>
-        <div
-          className="choice-grid choice-list"
-          aria-describedby={describedBy(
-            `${completionStatusId}-hint`,
-            errors.completionStatus && `${completionStatusId}-error`,
-          )}
-          aria-invalid={errors.completionStatus ? true : undefined}
-        >
-          {COMPLETION_STATUS_OPTIONS.map((option) => (
-            <div className="choice-card choice-option" key={option.value}>
-              <input
-                id={`${completionStatusId}-${option.value}`}
-                type="radio"
-                name="completionStatus"
-                value={option.value}
-                checked={values.completionStatus === option.value}
-                onChange={() =>
-                  updateField("completionStatus", option.value)
-                }
-              />
-              <label htmlFor={`${completionStatusId}-${option.value}`}>
-                {option.label}
-              </label>
-            </div>
-          ))}
+        <div className="form-grid form-grid--single">
+          <div className="field form-field">
+            <label
+              className="field-label form-label"
+              htmlFor={actualTaskTextId}
+            >
+              今日やったこと
+              <span className="optional-label">（任意）</span>
+            </label>
+            <textarea
+              className="textarea"
+              id={actualTaskTextId}
+              name="actualTaskText"
+              value={values.actualTaskText}
+              onChange={(event) =>
+                updateField("actualTaskText", event.target.value)
+              }
+              rows={4}
+            />
+          </div>
         </div>
-        {errors.completionStatus && (
-          <p className="field-error" id={`${completionStatusId}-error`}>
-            {errors.completionStatus}
-          </p>
-        )}
       </fieldset>
 
       <fieldset className="form-section" disabled={isSaving}>
@@ -472,6 +357,8 @@ export function SessionForm({
           />
         </div>
       </fieldset>
+
+      {mode === "edit" && <LegacyTaskPlan session={values} />}
 
       <div className="save-actions form-actions">
         {isDirty && <span className="unsaved-indicator">未保存の変更があります</span>}

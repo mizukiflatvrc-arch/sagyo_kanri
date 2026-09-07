@@ -40,6 +40,33 @@ function sessionSnapshot(
 }
 
 describe("mapSessionDocument", () => {
+  it("予定なし・作業内容未入力の新しい日報を読み込める", () => {
+    const fields = {
+      plannedTaskCreated: false,
+      plannedTaskText: "",
+      actualTaskText: "",
+      completionStatus: "not_planned",
+    };
+    expect(mapSessionDocument(sessionSnapshot(fields))).toMatchObject(fields);
+  });
+
+  it.each(["on_schedule", "mostly_on_schedule", "off_schedule"])(
+    "既存の予定・比較結果 %s を変換せず読み込む",
+    (completionStatus) => {
+      const fields = {
+        plannedTaskCreated: true,
+        plannedTaskText: "  資料を読む\n",
+        completionStatus,
+      };
+      expect(mapSessionDocument(sessionSnapshot(fields))).toMatchObject(fields);
+    },
+  );
+
+  it.each(["unknown", "", null, 0])("不正な比較結果 %s を拒否する", (completionStatus) => {
+    expect(() => mapSessionDocument(sessionSnapshot({ completionStatus })))
+      .toThrow(InvalidFirestoreDataError);
+  });
+
   it("実作業時間がない現在形式を読み込める", () => {
     const session = mapSessionDocument(sessionSnapshot());
 

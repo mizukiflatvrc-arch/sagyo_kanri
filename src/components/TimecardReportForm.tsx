@@ -7,10 +7,7 @@ import {
   type FormEvent,
 } from "react";
 import type { Library } from "../types";
-import {
-  COMPLETION_STATUS_OPTIONS,
-  formatMinutes,
-} from "../utils/format";
+import { formatMinutes } from "../utils/format";
 import { differenceInMinutes, fromJstDateTimeLocal } from "../utils/date";
 import {
   parseTimecardReport,
@@ -272,62 +269,20 @@ export function TimecardReportForm({
       </fieldset>
 
       <fieldset className="form-section" disabled={isSaving}>
-        <legend>タスク</legend>
+        <legend>取り組んだこと</legend>
+        <p className="field-help">
+          予定を決めていなくても大丈夫です。そのとき取り組んだことを自由に残せます。空欄でも保存できます。
+        </p>
         <div className="form-grid form-grid--single">
-          <div
-            className="field choice-group"
-            role="group"
-            aria-labelledby={id("planned-task-label")}
-          >
-            <p className="field-label" id={id("planned-task-label")}>
-              予定タスクを作成しましたか
-            </p>
-            <div className="choice-grid choice-list choice-list--inline">
-              <div className="choice-card choice-option">
-                <input
-                  id={id("planned-yes")}
-                  type="radio"
-                  name="plannedTaskCreated"
-                  checked={values.plannedTaskCreated}
-                  onChange={() => updateField("plannedTaskCreated", true)}
-                />
-                <label htmlFor={id("planned-yes")}>はい</label>
-              </div>
-              <div className="choice-card choice-option">
-                <input
-                  id={id("planned-no")}
-                  type="radio"
-                  name="plannedTaskCreated"
-                  checked={!values.plannedTaskCreated}
-                  onChange={() => updateField("plannedTaskCreated", false)}
-                />
-                <label htmlFor={id("planned-no")}>いいえ</label>
-              </div>
-            </div>
-          </div>
-
-          <div className="field">
-            <label htmlFor={id("planned-text")}>
-              予定タスク <span className="optional-label">（任意）</span>
-            </label>
-            <textarea
-              className="textarea"
-              id={id("planned-text")}
-              value={values.plannedTaskText}
-              onChange={(event) =>
-                updateField("plannedTaskText", event.target.value)
-              }
-              rows={3}
-            />
-          </div>
-
           <div className="field">
             <label htmlFor={id("actual-text")}>
-              実際の作業内容 <span className="optional-label">（任意）</span>
+              今日やったこと <span className="optional-label">（任意）</span>
             </label>
             <textarea
               className="textarea"
               id={id("actual-text")}
+              name="actualTaskText"
+              placeholder="例：コードを書いた、仕様書を作った、気になったことを調べた"
               value={values.actualTaskText}
               onChange={(event) =>
                 updateField("actualTaskText", event.target.value)
@@ -336,40 +291,6 @@ export function TimecardReportForm({
             />
           </div>
         </div>
-      </fieldset>
-
-      <fieldset className="form-section" disabled={isSaving}>
-        <legend>終了状況</legend>
-        <div
-          className="choice-grid choice-list"
-          aria-invalid={errors.completionStatus ? true : undefined}
-          aria-describedby={
-            errors.completionStatus ? id("completion-error") : undefined
-          }
-        >
-          {COMPLETION_STATUS_OPTIONS.map((option) => (
-            <div className="choice-card choice-option" key={option.value}>
-              <input
-                id={id(`completion-${option.value}`)}
-                type="radio"
-                name="completionStatus"
-                value={option.value}
-                checked={values.completionStatus === option.value}
-                onChange={() =>
-                  updateField("completionStatus", option.value)
-                }
-              />
-              <label htmlFor={id(`completion-${option.value}`)}>
-                {option.label}
-              </label>
-            </div>
-          ))}
-        </div>
-        {errors.completionStatus ? (
-          <p className="field-error" id={id("completion-error")}>
-            {errors.completionStatus}
-          </p>
-        ) : null}
       </fieldset>
 
       <fieldset className="form-section" disabled={isSaving}>

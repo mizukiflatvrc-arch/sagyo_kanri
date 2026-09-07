@@ -108,6 +108,34 @@ describe("validateSessionForm", () => {
 });
 
 describe("form parsing", () => {
+  it("通常の新規追加も予定なし・作業内容未入力を許可する", () => {
+    expect(parseSessionForm(validSessionForm())).toMatchObject({
+      plannedTaskCreated: false,
+      plannedTaskText: "",
+      actualTaskText: "",
+      completionStatus: "not_planned",
+    });
+  });
+
+  it.each(["on_schedule", "mostly_on_schedule", "off_schedule"] as const)(
+    "以前の予定・比較結果 %s を空白も含めて保持する",
+    (completionStatus) => {
+      const plan = {
+        plannedTaskCreated: true,
+        plannedTaskText: "  資料を読む\n",
+        completionStatus,
+      };
+      expect(parseSessionForm(validSessionForm(plan))).toMatchObject(plan);
+    },
+  );
+
+  it("未知の比較結果は拒否する", () => {
+    const values = validSessionForm();
+    Object.assign(values, { completionStatus: "unknown" });
+    expect(validateSessionForm(values).completionStatus).toBeDefined();
+    expect(parseSessionForm(values)).toBeNull();
+  });
+
   it("parses duration parts without treating empty values as zero", () => {
     expect(parseDurationParts("1", "20")).toBe(80);
     expect(parseDurationParts("", "20")).toBeNull();

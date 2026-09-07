@@ -44,6 +44,9 @@ describe("ExportPage", () => {
   let originalClipboard: PropertyDescriptor | undefined;
 
   beforeEach(() => {
+    // Keep the default export period aligned with the fixed August fixture.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-15T03:00:00.000Z"));
     getSessionsForExportMock.mockReset();
     originalClipboard = Object.getOwnPropertyDescriptor(
       navigator,
@@ -64,6 +67,7 @@ describe("ExportPage", () => {
       Reflect.deleteProperty(navigator, "clipboard");
     }
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it("未生成時はコピーと印刷を無効にし、取得中も生成ボタンを無効にする", async () => {

@@ -1,10 +1,18 @@
 export const COMPLETION_STATUSES = [
+  "not_planned",
   "on_schedule",
   "mostly_on_schedule",
   "off_schedule",
 ] as const;
 
 export type CompletionStatus = (typeof COMPLETION_STATUSES)[number];
+
+/** New reports record work without requiring a prior plan. Keep the stored keys. */
+export const UNPLANNED_TASK_FIELDS = {
+  plannedTaskCreated: false,
+  plannedTaskText: "",
+  completionStatus: "not_planned",
+} as const;
 
 export const NEXT_DAY_REACTIONS = [
   "pending",

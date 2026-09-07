@@ -208,7 +208,8 @@ export function parseSessionForm(
     fatigueScore: values.fatigueScore,
     selfCriticismScore: values.selfCriticismScore,
     plannedTaskCreated: values.plannedTaskCreated,
-    plannedTaskText: values.plannedTaskText.trim(),
+    // Historical plan text is retained verbatim; the form no longer edits it.
+    plannedTaskText: values.plannedTaskText,
     actualTaskText: values.actualTaskText.trim(),
     completionStatus: values.completionStatus,
     nextDayReaction: values.nextDayReaction,

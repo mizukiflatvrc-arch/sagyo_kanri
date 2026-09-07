@@ -18,7 +18,7 @@ import {
   writeBatch,
   type DocumentData,
 } from "firebase/firestore";
-import { afterAll, afterEach, beforeAll, describe, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
 const PROJECT_ID = "demo-library-work-log-rules";
 const RULES_SOURCE = readFileSync(
@@ -211,6 +211,83 @@ describe("Firestore security rules", () => {
 
   afterAll(async () => {
     await testEnvironment.cleanup();
+  });
+
+  it.each([
+    ["not_planned", ""],
+    ["not_planned", "コードを書いた、仕様書を作った"],
+    ["on_schedule", "資料を読んだ"],
+    ["mostly_on_schedule", "資料を読んだ"],
+    ["off_schedule", "資料を読んだ"],
+  ])("%s / %j の作成と履歴付き更新を許可する", async (completionStatus, actualTaskText) => {
+    const firestore = testEnvironment.authenticatedContext(OWNER_UID).firestore();
+    await setDoc(
+      doc(firestore, `users/${OWNER_UID}/libraries/library-1`),
+      validLibraryDocument(OWNER_UID),
+    );
+    const sessionReference = doc(firestore, `users/${OWNER_UID}/sessions/report`);
+    const plan = {
+      plannedTaskCreated: completionStatus !== "not_planned",
+      plannedTaskText: completionStatus === "not_planned" ? "" : "  資料を読む\n",
+      completionStatus,
+    };
+    await assertSucceeds(setDoc(sessionReference, {
+      ...validSessionDocument(OWNER_UID),
+      ...plan,
+      actualTaskText,
+    }));
+    const before = (await getDoc(sessionReference)).data() ?? {};
+    const revisionReference = doc(firestore, `users/${OWNER_UID}/sessions/report/revisions/1`);
+    const batch = writeBatch(firestore);
+    batch.set(revisionReference, validRevisionDocument("report", 1, before, ["actualTaskText"]));
+    batch.update(sessionReference, {
+      actualTaskText: "気になったことを調べた",
+      version: 2,
+      updatedAt: serverTimestamp(),
+    });
+    await assertSucceeds(batch.commit());
+    expect((await getDoc(sessionReference)).data()).toMatchObject({
+      ...plan,
+      actualTaskText: "気になったことを調べた",
+    });
+    expect((await getDoc(revisionReference)).data()?.snapshot).toEqual(before);
+  });
+
+  it.each([
+    { completionStatus: "unknown" },
+    { completionStatus: null },
+    { completionStatus: 0 },
+    { plannedTaskCreated: "false" },
+    { plannedTaskText: null },
+    { actualTaskText: null },
+  ])("予定なしでも不正なフィールド %j は作成・更新とも拒否する", async (invalidFields) => {
+    const firestore = testEnvironment.authenticatedContext(OWNER_UID).firestore();
+    await setDoc(
+      doc(firestore, `users/${OWNER_UID}/libraries/library-1`),
+      validLibraryDocument(OWNER_UID),
+    );
+    const sessionReference = doc(firestore, `users/${OWNER_UID}/sessions/report`);
+    const valid = {
+      ...validSessionDocument(OWNER_UID),
+      plannedTaskCreated: false,
+      plannedTaskText: "",
+      actualTaskText: "",
+      completionStatus: "not_planned",
+    };
+    await assertFails(setDoc(sessionReference, { ...valid, ...invalidFields }));
+    await setDoc(sessionReference, valid);
+    const before = (await getDoc(sessionReference)).data() ?? {};
+    const batch = writeBatch(firestore);
+    batch.set(
+      doc(firestore, `users/${OWNER_UID}/sessions/report/revisions/1`),
+      validRevisionDocument("report", 1, before, Object.keys(invalidFields)),
+    );
+    batch.update(sessionReference, {
+      ...invalidFields,
+      version: 2,
+      updatedAt: serverTimestamp(),
+    });
+    await assertFails(batch.commit());
   });
 
   it("未認証ユーザーの読み書きを拒否する", async () => {
@@ -630,7 +707,10 @@ describe("Firestore security rules", () => {
     );
     const session: Record<string, unknown> = {
       ...validSessionDocument(OWNER_UID),
-      selfCriticismMinutes: 30,
+      plannedTaskCreated: false,
+      plannedTaskText: "",
+      actualTaskText: "",
+      completionStatus: "not_planned",
     };
     delete session.actualWorkMinutes;
 

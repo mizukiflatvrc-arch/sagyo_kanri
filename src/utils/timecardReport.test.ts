@@ -14,15 +14,23 @@ function validValues(): TimecardReportFormValues {
     anxietyScore: 4,
     fatigueScore: 5,
     selfCriticismScore: 2,
-    plannedTaskCreated: true,
-    plannedTaskText: "資料を読む",
     actualTaskText: "資料を読んだ",
-    completionStatus: "mostly_on_schedule",
     note: "",
   };
 }
 
 describe("validateTimecardReport", () => {
+  it.each(["", "   ", " コードを書いた\n仕様書を作った "])(
+    "予定の指定なしで任意の作業内容 %j を保存用に解析する",
+    (actualTaskText) => {
+      const values = { ...validValues(), actualTaskText };
+      expect(validateTimecardReport(values)).toEqual({});
+      expect(parseTimecardReport(values)).toMatchObject({
+        actualTaskText: actualTaskText.trim(),
+      });
+    },
+  );
+
   it("入退室日時から滞在分数を計算して解析する", () => {
     expect(parseTimecardReport(validValues())).toMatchObject({
       stayMinutes: 120,

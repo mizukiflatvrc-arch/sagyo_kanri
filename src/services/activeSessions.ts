@@ -18,11 +18,7 @@ import type {
 } from "../types/activeSession";
 import { calculateActiveSessionStayMinutes } from "../utils/activeSession";
 
-const COMPLETION_STATUSES = new Set([
-  "on_schedule",
-  "mostly_on_schedule",
-  "off_schedule",
-]);
+import { UNPLANNED_TASK_FIELDS } from "../types";
 
 export class ActiveSessionAlreadyExistsError extends Error {
   constructor() {
@@ -292,10 +288,6 @@ function validatedCompletedSession(input: CompleteActiveSessionInput) {
     );
   }
 
-  if (!COMPLETION_STATUSES.has(input.completionStatus)) {
-    throw new InvalidActiveSessionDataError("終了状況を選択してください。");
-  }
-
   return {
     activeEnteredAt: input.activeEnteredAt,
     userInput: {
@@ -307,10 +299,8 @@ function validatedCompletedSession(input: CompleteActiveSessionInput) {
       anxietyScore: input.anxietyScore,
       fatigueScore: input.fatigueScore,
       selfCriticismScore: input.selfCriticismScore,
-      plannedTaskCreated: input.plannedTaskCreated,
-      plannedTaskText: input.plannedTaskText.trim(),
+      ...UNPLANNED_TASK_FIELDS,
       actualTaskText: input.actualTaskText.trim(),
-      completionStatus: input.completionStatus,
       note: input.note.trim(),
     },
   };

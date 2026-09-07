@@ -6,12 +6,14 @@ import type {
 import {
   COMPLETION_STATUSES,
   NEXT_DAY_REACTIONS,
+  UNPLANNED_TASK_FIELDS,
   type CompletionStatus,
   type NextDayReaction,
 } from "../types";
 import { toJstDateTimeLocal } from "./date";
 
 export const COMPLETION_STATUS_LABELS: Record<CompletionStatus, string> = {
+  not_planned: "予定なし",
   on_schedule: "予定どおり",
   mostly_on_schedule: "おおむね予定どおり",
   off_schedule: "予定から外れた",
@@ -103,10 +105,8 @@ export function createEmptySessionFormValues(
     anxietyScore: 5,
     fatigueScore: 5,
     selfCriticismScore: 0,
-    plannedTaskCreated: false,
-    plannedTaskText: "",
+    ...UNPLANNED_TASK_FIELDS,
     actualTaskText: "",
-    completionStatus: "on_schedule",
     nextDayReaction: "pending",
     nextDayNote: "",
     note: "",

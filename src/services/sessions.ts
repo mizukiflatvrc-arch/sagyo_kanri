@@ -20,6 +20,7 @@ import type {
   LibrarySession,
   NextDayReaction,
 } from "../types";
+import { UNPLANNED_TASK_FIELDS } from "../types";
 import { requireFirestore } from "../lib/firebase";
 import {
   mapSessionDocument,
@@ -154,6 +155,7 @@ export async function createSession(
 ): Promise<string> {
   const reference = await addDoc(sessionsCollection(userId), {
     ...sessionPayload(input),
+    ...UNPLANNED_TASK_FIELDS,
     userId,
     version: 1,
     deleting: false,
@@ -246,6 +248,11 @@ export async function updateSession(
     sessionId,
     (current) => ({
       ...input,
+      // These historical fields are no longer editable in the report form.
+      // Preserve the exact transaction values, including whitespace in old text.
+      plannedTaskCreated: current.plannedTaskCreated,
+      plannedTaskText: current.plannedTaskText,
+      completionStatus: current.completionStatus,
       // The next-day fields are edited on a separate screen. Preserve the
       // latest transaction value instead of overwriting it with hidden form
       // state from an older render.

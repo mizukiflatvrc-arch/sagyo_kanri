@@ -76,10 +76,7 @@ function completeInput(
     anxietyScore: 4,
     fatigueScore: 6,
     selfCriticismScore: 3,
-    plannedTaskCreated: true,
-    plannedTaskText: "資料を読む",
     actualTaskText: "資料を読んだ",
-    completionStatus: "mostly_on_schedule",
     note: "",
     ...overrides,
   };
@@ -255,6 +252,28 @@ describe("cancelActiveSession", () => {
 });
 
 describe("completeActiveSession", () => {
+  it.each(["", "   ", " コードを書いた\n仕様書を作った "])(
+    "予定入力なしで作業内容 %j と互換フィールドを保存する",
+    async (actualTaskText) => {
+      const transaction = transactionFor(activeData({
+        exitStartedAt: Timestamp.fromDate(new Date("2026-07-31T03:00:00.000Z")),
+      }));
+      firestoreMocks.runTransaction.mockImplementation(
+        async (_firestore, callback) => callback(transaction),
+      );
+
+      await completeActiveSession("user-1", completeInput({ actualTaskText }));
+
+      expect(transaction.set.mock.calls[0]?.[1]).toMatchObject({
+        plannedTaskCreated: false,
+        plannedTaskText: "",
+        completionStatus: "not_planned",
+        actualTaskText: actualTaskText.trim(),
+      });
+      expect(transaction.delete).toHaveBeenCalledOnce();
+    },
+  );
+
   it("完成セッション作成とactiveSession削除を同じtransactionで行う", async () => {
     const transaction = transactionFor(
       activeData({

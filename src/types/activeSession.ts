@@ -1,5 +1,3 @@
-import type { CompletionStatus } from "./index";
-
 /**
  * A single in-progress library visit.
  *
@@ -33,9 +31,6 @@ export interface CompleteActiveSessionInput {
   fatigueScore: number;
   selfCriticismScore: number;
 
-  plannedTaskCreated: boolean;
-  plannedTaskText: string;
   actualTaskText: string;
-  completionStatus: CompletionStatus;
   note: string;
 }

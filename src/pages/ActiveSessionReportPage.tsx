@@ -37,10 +37,7 @@ export function ActiveSessionReportPage() {
             anxietyScore: 5,
             fatigueScore: 5,
             selfCriticismScore: 0,
-            plannedTaskCreated: false,
-            plannedTaskText: "",
             actualTaskText: "",
-            completionStatus: "on_schedule" as const,
             note: "",
           }
         : null,
@@ -124,7 +121,7 @@ export function ActiveSessionReportPage() {
       <PageHeader
         eyebrow="CHECK OUT"
         title="退出後の日報"
-        description="滞在できたことと、そのときの状態をわかる範囲で残します。実作業時間は入力しません。"
+        description="今日取り組んだことと、そのときの状態を残します。事前の予定は不要で、作業内容は空欄でも保存できます。"
         backTo="/"
         backLabel="ホーム"
       />
