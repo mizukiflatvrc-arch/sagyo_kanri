@@ -204,3 +204,11 @@ export function jstDateKeysInRange(
   }
   return keys;
 }
+
+/** Shifts a valid JST calendar date without using the host time zone. */
+export function shiftJstDateKey(dateKey: string, days: number): string {
+  if (!Number.isInteger(days)) return "";
+  const range = createJstDateRange(dateKey, dateKey);
+  if (range === null) return "";
+  return toJstDateKey(new Date(range.start.getTime() + days * DAY_MS));
+}

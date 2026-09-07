@@ -28,6 +28,7 @@ import {
 import { ConcurrentEditError } from "./errors";
 import { LEGACY_RECORD_MESSAGE } from "./legacyRecords";
 import type { ExportSessionRecord } from "../utils/export";
+import type { ReportSessionRecord } from "../report/types";
 import { normalizeSessionPlan, type SessionPlanChanges } from "../utils/sessionPlan";
 
 const EDITABLE_KEYS = [
@@ -146,6 +147,43 @@ export async function getSessionsForExport(
         selfCriticismScore: selfCriticismScoreFromData(data),
       };
       return record;
+    });
+}
+
+/**
+ * Fetches the richer, read-only shape used by the medical-visit report.
+ * It deliberately goes through the existing mapper so legacy encrypted text
+ * remains hidden and former self-criticism values keep their current fallback.
+ */
+export async function getSessionsForReport(
+  userId: string,
+  start: Date,
+  endExclusive: Date,
+): Promise<ReportSessionRecord[]> {
+  const sessionsQuery = query(
+    sessionsCollection(userId),
+    where("enteredAt", ">=", Timestamp.fromDate(start)),
+    where("enteredAt", "<", Timestamp.fromDate(endExclusive)),
+    orderBy("enteredAt", "asc"),
+  );
+  const snapshot = await getDocs(sessionsQuery);
+
+  return snapshot.docs
+    .filter((document) => document.data().deleting !== true)
+    .map((document) => {
+      const session = mapSessionDocument(document);
+      return {
+        libraryId: session.libraryId,
+        enteredAt: session.enteredAt,
+        exitedAt: session.exitedAt,
+        stayMinutes: session.stayMinutes,
+        concentrationScore: session.concentrationScore,
+        anxietyScore: session.anxietyScore,
+        fatigueScore: session.fatigueScore,
+        selfCriticismScore: session.selfCriticismScore,
+        actualTaskText: session.actualTaskText,
+        note: session.note,
+      };
     });
 }
 
