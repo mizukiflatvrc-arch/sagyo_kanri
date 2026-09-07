@@ -31,6 +31,7 @@ interface NextDayReactionBadgeProps {
 }
 
 const completionTones: Record<CompletionStatus, StatusBadgeTone> = {
+  not_planned: "neutral",
   on_schedule: "success",
   mostly_on_schedule: "info",
   off_schedule: "warning",

@@ -117,7 +117,6 @@ export function SessionForm({
   const anxietyId = `${formId}-anxiety`;
   const fatigueId = `${formId}-fatigue`;
   const selfCriticismId = `${formId}-self-criticism`;
-  const plannedTaskId = `${formId}-planned-task`;
   const plannedTaskTextId = `${formId}-planned-task-text`;
   const actualTaskTextId = `${formId}-actual-task-text`;
   const completionStatusId = `${formId}-completion-status`;
@@ -318,99 +317,57 @@ export function SessionForm({
       </fieldset>
 
       <fieldset className="form-section" disabled={isSaving}>
-        <legend>タスク</legend>
+        <legend>作業内容</legend>
 
         <div className="form-grid form-grid--single">
-        <div
-          className="field choice-group"
-          role="group"
-          aria-labelledby={`${plannedTaskId}-label`}
-          aria-describedby={
-            errors.plannedTaskCreated
-              ? `${plannedTaskId}-error`
-              : undefined
-          }
-        >
-          <p
-            className="field-label form-label"
-            id={`${plannedTaskId}-label`}
-          >
-            開始時に予定タスクを設定できましたか
-          </p>
-          <div className="choice-grid choice-list choice-list--inline">
-            <div className="choice-card choice-option">
-              <input
-                id={`${plannedTaskId}-yes`}
-                type="radio"
-                name="plannedTaskCreated"
-                value="yes"
-                checked={values.plannedTaskCreated}
-                onChange={() => updateField("plannedTaskCreated", true)}
-              />
-              <label htmlFor={`${plannedTaskId}-yes`}>
-                はい
-              </label>
-            </div>
-            <div className="choice-card choice-option">
-              <input
-                id={`${plannedTaskId}-no`}
-                type="radio"
-                name="plannedTaskCreated"
-                value="no"
-                checked={!values.plannedTaskCreated}
-                onChange={() => updateField("plannedTaskCreated", false)}
-              />
-              <label htmlFor={`${plannedTaskId}-no`}>
-                いいえ
-              </label>
-            </div>
+          <div className="field form-field">
+            <label
+              className="field-label form-label"
+              htmlFor={actualTaskTextId}
+            >
+              取り組んだこと
+              <span className="optional-label">（任意）</span>
+            </label>
+            <textarea
+              className="textarea"
+              id={actualTaskTextId}
+              name="actualTaskText"
+              value={values.actualTaskText}
+              onChange={(event) =>
+                updateField("actualTaskText", event.target.value)
+              }
+              placeholder="コードの実装、仕様の整理、調べ物など、取り組んだことを自由に記録できます"
+              rows={4}
+            />
           </div>
-          {errors.plannedTaskCreated && (
-            <p className="field-error" id={`${plannedTaskId}-error`}>
-              {errors.plannedTaskCreated}
-            </p>
-          )}
-        </div>
 
-        <div className="field form-field">
-          <label
-            className="field-label form-label"
-            htmlFor={plannedTaskTextId}
+          <details
+            className="optional-details"
+            open={Boolean(values.plannedTaskText)}
           >
-            予定タスク内容
-            <span className="optional-label">（任意）</span>
-          </label>
-          <textarea
-            className="textarea"
-            id={plannedTaskTextId}
-            name="plannedTaskText"
-            value={values.plannedTaskText}
-            onChange={(event) =>
-              updateField("plannedTaskText", event.target.value)
-            }
-            rows={3}
-          />
-        </div>
-
-        <div className="field form-field">
-          <label
-            className="field-label form-label"
-            htmlFor={actualTaskTextId}
-          >
-            実際に行った作業
-            <span className="optional-label">（任意）</span>
-          </label>
-          <textarea
-            className="textarea"
-            id={actualTaskTextId}
-            name="actualTaskText"
-            value={values.actualTaskText}
-            onChange={(event) =>
-              updateField("actualTaskText", event.target.value)
-            }
-            rows={4}
-          />
-        </div>
+            <summary className="optional-details__summary">
+              事前に予定していたタスクがあれば入力する
+            </summary>
+            <div className="field form-field" style={{ marginTop: "0.75rem" }}>
+              <label
+                className="field-label form-label"
+                htmlFor={plannedTaskTextId}
+              >
+                予定タスク内容
+                <span className="optional-label">（任意）</span>
+              </label>
+              <textarea
+                className="textarea"
+                id={plannedTaskTextId}
+                name="plannedTaskText"
+                value={values.plannedTaskText}
+                onChange={(event) =>
+                  updateField("plannedTaskText", event.target.value)
+                }
+                rows={3}
+              />
+            </div>
+          </details>
         </div>
       </fieldset>
 
@@ -420,7 +377,7 @@ export function SessionForm({
           className="form-section__hint field-help field-hint"
           id={`${completionStatusId}-hint`}
         >
-          当初の予定と比べて、近いものを選んでください。
+          予定を決めずに作業した場合は「予定なし」のままで構いません。
         </p>
         <div
           className="choice-grid choice-list"

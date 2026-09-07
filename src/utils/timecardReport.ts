@@ -12,7 +12,7 @@ export interface TimecardReportFormValues {
   anxietyScore: number;
   fatigueScore: number;
   selfCriticismScore: number;
-  plannedTaskCreated: boolean;
+  plannedTaskCreated?: boolean;
   plannedTaskText: string;
   actualTaskText: string;
   completionStatus: CompletionStatus;
@@ -115,6 +115,9 @@ export function parseTimecardReport(
     return null;
   }
 
+  const plannedTaskText = values.plannedTaskText.trim();
+  const plannedTaskCreated = plannedTaskText.length > 0;
+
   return {
     libraryId: values.libraryId.trim(),
     enteredAt,
@@ -124,8 +127,8 @@ export function parseTimecardReport(
     anxietyScore: values.anxietyScore,
     fatigueScore: values.fatigueScore,
     selfCriticismScore: values.selfCriticismScore,
-    plannedTaskCreated: values.plannedTaskCreated,
-    plannedTaskText: values.plannedTaskText.trim(),
+    plannedTaskCreated,
+    plannedTaskText,
     actualTaskText: values.actualTaskText.trim(),
     completionStatus: values.completionStatus,
     note: values.note.trim(),

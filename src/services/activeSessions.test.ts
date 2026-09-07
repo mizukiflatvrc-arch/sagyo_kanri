@@ -358,4 +358,38 @@ describe("completeActiveSession", () => {
     expect(transaction.set).not.toHaveBeenCalled();
     expect(transaction.delete).not.toHaveBeenCalled();
   });
+
+  it("予定なし(not_planned)の終了状況でも正常にセッションを保存する", async () => {
+    const transaction = transactionFor(
+      activeData({
+        exitStartedAt: Timestamp.fromDate(
+          new Date("2026-07-31T03:00:00.000Z"),
+        ),
+      }),
+    );
+    firestoreMocks.runTransaction.mockImplementation(
+      async (_firestore, callback) => callback(transaction),
+    );
+
+    await expect(
+      completeActiveSession(
+        "user-1",
+        completeInput({
+          completionStatus: "not_planned",
+          plannedTaskCreated: false,
+          plannedTaskText: "",
+          actualTaskText: "日報フローの修正",
+        }),
+      ),
+    ).resolves.toBe("completed-session");
+
+    expect(transaction.set).toHaveBeenCalledOnce();
+    const payload = transaction.set.mock.calls[0]?.[1];
+    expect(payload).toMatchObject({
+      completionStatus: "not_planned",
+      plannedTaskCreated: false,
+      plannedTaskText: "",
+      actualTaskText: "日報フローの修正",
+    });
+  });
 });

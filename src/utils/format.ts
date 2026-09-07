@@ -12,6 +12,7 @@ import {
 import { toJstDateTimeLocal } from "./date";
 
 export const COMPLETION_STATUS_LABELS: Record<CompletionStatus, string> = {
+  not_planned: "予定なし",
   on_schedule: "予定どおり",
   mostly_on_schedule: "おおむね予定どおり",
   off_schedule: "予定から外れた",
@@ -106,7 +107,7 @@ export function createEmptySessionFormValues(
     plannedTaskCreated: false,
     plannedTaskText: "",
     actualTaskText: "",
-    completionStatus: "on_schedule",
+    completionStatus: "not_planned",
     nextDayReaction: "pending",
     nextDayNote: "",
     note: "",

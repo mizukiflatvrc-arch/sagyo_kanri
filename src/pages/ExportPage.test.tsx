@@ -44,6 +44,8 @@ describe("ExportPage", () => {
   let originalClipboard: PropertyDescriptor | undefined;
 
   beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-15T12:00:00.000Z"));
     getSessionsForExportMock.mockReset();
     originalClipboard = Object.getOwnPropertyDescriptor(
       navigator,
@@ -63,6 +65,7 @@ describe("ExportPage", () => {
     } else {
       Reflect.deleteProperty(navigator, "clipboard");
     }
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 

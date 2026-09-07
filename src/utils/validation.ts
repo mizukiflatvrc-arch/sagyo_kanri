@@ -207,7 +207,7 @@ export function parseSessionForm(
     anxietyScore: values.anxietyScore,
     fatigueScore: values.fatigueScore,
     selfCriticismScore: values.selfCriticismScore,
-    plannedTaskCreated: values.plannedTaskCreated,
+    plannedTaskCreated: values.plannedTaskText.trim().length > 0,
     plannedTaskText: values.plannedTaskText.trim(),
     actualTaskText: values.actualTaskText.trim(),
     completionStatus: values.completionStatus,

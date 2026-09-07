@@ -40,7 +40,7 @@ export function ActiveSessionReportPage() {
             plannedTaskCreated: false,
             plannedTaskText: "",
             actualTaskText: "",
-            completionStatus: "on_schedule" as const,
+            completionStatus: "not_planned" as const,
             note: "",
           }
         : null,

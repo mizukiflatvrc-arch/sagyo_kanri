@@ -127,6 +127,28 @@ describe("form parsing", () => {
   it("returns null for invalid form values", () => {
     expect(parseSessionForm(validSessionForm({ libraryId: "" }))).toBeNull();
   });
+
+  it("parses not_planned completion status and determines plannedTaskCreated automatically", () => {
+    const parsedWithoutPlan = parseSessionForm(
+      validSessionForm({
+        completionStatus: "not_planned",
+        plannedTaskText: "",
+        actualTaskText: "作業ログの改善",
+      }),
+    );
+    expect(parsedWithoutPlan?.completionStatus).toBe("not_planned");
+    expect(parsedWithoutPlan?.plannedTaskCreated).toBe(false);
+    expect(parsedWithoutPlan?.actualTaskText).toBe("作業ログの改善");
+
+    const parsedWithPlan = parseSessionForm(
+      validSessionForm({
+        completionStatus: "on_schedule",
+        plannedTaskText: "テスト作成",
+        actualTaskText: "テスト作成完了",
+      }),
+    );
+    expect(parsedWithPlan?.plannedTaskCreated).toBe(true);
+  });
 });
 
 describe("JST datetime-local conversion", () => {

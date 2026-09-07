@@ -272,58 +272,11 @@ export function TimecardReportForm({
       </fieldset>
 
       <fieldset className="form-section" disabled={isSaving}>
-        <legend>タスク</legend>
+        <legend>作業内容</legend>
         <div className="form-grid form-grid--single">
-          <div
-            className="field choice-group"
-            role="group"
-            aria-labelledby={id("planned-task-label")}
-          >
-            <p className="field-label" id={id("planned-task-label")}>
-              予定タスクを作成しましたか
-            </p>
-            <div className="choice-grid choice-list choice-list--inline">
-              <div className="choice-card choice-option">
-                <input
-                  id={id("planned-yes")}
-                  type="radio"
-                  name="plannedTaskCreated"
-                  checked={values.plannedTaskCreated}
-                  onChange={() => updateField("plannedTaskCreated", true)}
-                />
-                <label htmlFor={id("planned-yes")}>はい</label>
-              </div>
-              <div className="choice-card choice-option">
-                <input
-                  id={id("planned-no")}
-                  type="radio"
-                  name="plannedTaskCreated"
-                  checked={!values.plannedTaskCreated}
-                  onChange={() => updateField("plannedTaskCreated", false)}
-                />
-                <label htmlFor={id("planned-no")}>いいえ</label>
-              </div>
-            </div>
-          </div>
-
-          <div className="field">
-            <label htmlFor={id("planned-text")}>
-              予定タスク <span className="optional-label">（任意）</span>
-            </label>
-            <textarea
-              className="textarea"
-              id={id("planned-text")}
-              value={values.plannedTaskText}
-              onChange={(event) =>
-                updateField("plannedTaskText", event.target.value)
-              }
-              rows={3}
-            />
-          </div>
-
           <div className="field">
             <label htmlFor={id("actual-text")}>
-              実際の作業内容 <span className="optional-label">（任意）</span>
+              今日やったこと <span className="optional-label">（任意）</span>
             </label>
             <textarea
               className="textarea"
@@ -332,14 +285,41 @@ export function TimecardReportForm({
               onChange={(event) =>
                 updateField("actualTaskText", event.target.value)
               }
+              placeholder="コードの実装、仕様の整理、調べ物など、取り組んだことを自由に記録できます"
               rows={4}
             />
           </div>
+
+          <details
+            className="optional-details"
+            open={Boolean(values.plannedTaskText)}
+          >
+            <summary className="optional-details__summary">
+              事前に予定していたタスクがあれば入力する
+            </summary>
+            <div className="field" style={{ marginTop: "0.75rem" }}>
+              <label htmlFor={id("planned-text")}>
+                予定タスク <span className="optional-label">（任意）</span>
+              </label>
+              <textarea
+                className="textarea"
+                id={id("planned-text")}
+                value={values.plannedTaskText}
+                onChange={(event) =>
+                  updateField("plannedTaskText", event.target.value)
+                }
+                rows={3}
+              />
+            </div>
+          </details>
         </div>
       </fieldset>
 
       <fieldset className="form-section" disabled={isSaving}>
         <legend>終了状況</legend>
+        <p className="form-section__hint field-help field-hint">
+          予定を決めずに作業した場合は「予定なし」のままで構いません。
+        </p>
         <div
           className="choice-grid choice-list"
           aria-invalid={errors.completionStatus ? true : undefined}

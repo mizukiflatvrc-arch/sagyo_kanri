@@ -528,6 +528,26 @@ describe("Firestore security rules", () => {
         },
       ),
     );
+    await assertSucceeds(
+      setDoc(
+        doc(firestore, `users/${OWNER_UID}/sessions/not-planned-session`),
+        {
+          ...validSessionDocument(OWNER_UID),
+          completionStatus: "not_planned",
+          plannedTaskCreated: false,
+          plannedTaskText: "",
+        },
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(firestore, `users/${OWNER_UID}/sessions/invalid-completion-status`),
+        {
+          ...validSessionDocument(OWNER_UID),
+          completionStatus: "invalid_status",
+        },
+      ),
+    );
   });
 
   it("既存の実作業時間と自己否定時間は更新時に同値で保持する", async () => {
