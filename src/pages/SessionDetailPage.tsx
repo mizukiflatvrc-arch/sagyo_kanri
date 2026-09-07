@@ -196,24 +196,22 @@ export function SessionDetailPage() {
           </section>
 
           <section className="detail-section">
-            <h2>予定と実際の作業</h2>
+            <h2>取り組んだこと・作業内容</h2>
             <dl className="detail-list">
-              <div className="detail-item">
-                <dt>開始時に予定タスクを設定</dt>
-                <dd>{session.plannedTaskCreated ? "はい" : "いいえ"}</dd>
+              <div className="detail-item detail-item--wide">
+                <dt>取り組んだこと</dt>
+                <dd>{textOrDash(session.actualTaskText)}</dd>
               </div>
               <div className="detail-item">
                 <dt>終了状況</dt>
                 <dd>{COMPLETION_STATUS_LABELS[session.completionStatus]}</dd>
               </div>
-              <div className="detail-item detail-item--wide">
-                <dt>予定タスク</dt>
-                <dd>{textOrDash(session.plannedTaskText)}</dd>
-              </div>
-              <div className="detail-item detail-item--wide">
-                <dt>実際に行った作業</dt>
-                <dd>{textOrDash(session.actualTaskText)}</dd>
-              </div>
+              {(session.plannedTaskCreated || session.plannedTaskText) && (
+                <div className="detail-item detail-item--wide">
+                  <dt>事前に予定していたタスク</dt>
+                  <dd>{textOrDash(session.plannedTaskText)}</dd>
+                </div>
+              )}
             </dl>
           </section>
 

@@ -114,5 +114,48 @@ describe("タイムカードUI", () => {
     expect(container.textContent).toContain("自己否定の割合");
     expect(container.textContent).toContain("0 / 10");
     expect(container.textContent).not.toContain("実作業時間");
+    expect(container.textContent).not.toContain("予定タスクを作成しましたか");
+    expect(container.textContent).toContain("今日やったこと");
+    expect(container.textContent).toContain("予定なし");
+  });
+
+  it("予定なし(not_planned)を初期値として日報フォームをレンダリングできる", () => {
+    const library: Library = {
+      id: "library-1",
+      userId: "user-1",
+      name: "中央図書館",
+      googleMapsUrl: "",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    };
+    act(() => {
+      root.render(
+        <TimecardReportForm
+          initialValues={{
+            libraryId: "library-1",
+            enteredAt: "2026-08-01T10:00",
+            exitedAt: "2026-08-01T12:00",
+            concentrationScore: 5,
+            anxietyScore: 5,
+            fatigueScore: 5,
+            selfCriticismScore: 0,
+            plannedTaskText: "",
+            actualTaskText: "コードのリファクタリング",
+            completionStatus: "not_planned",
+            note: "",
+          }}
+          libraries={[library]}
+          isSaving={false}
+          onSubmit={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+    });
+
+    const notPlannedRadio = container.querySelector<HTMLInputElement>(
+      'input[name="completionStatus"][value="not_planned"]',
+    );
+    expect(notPlannedRadio).not.toBeNull();
+    expect(notPlannedRadio?.checked).toBe(true);
   });
 });

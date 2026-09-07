@@ -9,6 +9,7 @@ const FRIENDLY_FIREBASE_MESSAGES: Record<string, string> = {
 };
 
 const USER_FACING_ERROR_NAMES = new Set([
+  "InvalidSessionPlanError",
   "ConcurrentEditError",
   "ActiveSessionAlreadyExistsError",
   "ActiveSessionNotFoundError",

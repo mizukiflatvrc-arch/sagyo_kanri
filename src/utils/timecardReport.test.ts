@@ -66,4 +66,48 @@ describe("validateTimecardReport", () => {
       }),
     ).not.toThrow();
   });
+
+  it("予定なし(not_planned)の終了状況を受け入れる", () => {
+    const values = { ...validValues(), plannedTaskText: "", completionStatus: "not_planned" as const };
+    expect(validateTimecardReport(values).completionStatus).toBeUndefined();
+    expect(parseTimecardReport(values)?.completionStatus).toBe("not_planned");
+  });
+
+  it("予定タスクが空の場合はplannedTaskCreatedをfalseにする", () => {
+    const values = {
+      ...validValues(),
+      plannedTaskText: "  ",
+      actualTaskText: "コードを書いた",
+    };
+    const parsed = parseTimecardReport(values);
+    expect(parsed?.plannedTaskCreated).toBe(false);
+    expect(parsed?.plannedTaskText).toBe("");
+    expect(parsed?.completionStatus).toBe("not_planned");
+    expect(parsed?.actualTaskText).toBe("コードを書いた");
+  });
+
+  it("予定タスクが入力されている場合はplannedTaskCreatedをtrueにする", () => {
+    const values = {
+      ...validValues(),
+      plannedTaskText: "設計書レビュー",
+    };
+    const parsed = parseTimecardReport(values);
+    expect(parsed?.plannedTaskCreated).toBe(true);
+    expect(parsed?.plannedTaskText).toBe("設計書レビュー");
+  });
+
+  it("actualTaskTextが空でもバリデーションエラーにならない（任意）", () => {
+    const values = {
+      ...validValues(),
+      actualTaskText: "",
+    };
+    expect(validateTimecardReport(values)).toEqual({});
+    expect(parseTimecardReport(values)?.actualTaskText).toBe("");
+  });
+
+  it("予定ありでnot_plannedのままなら終了状況の選択を求める", () => {
+    const values = { ...validValues(), completionStatus: "not_planned" as const };
+    expect(validateTimecardReport(values).completionStatus).toBeDefined();
+    expect(parseTimecardReport(values)).toBeNull();
+  });
 });

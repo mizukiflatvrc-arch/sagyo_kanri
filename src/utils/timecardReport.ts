@@ -3,6 +3,7 @@ import {
   type CompletionStatus,
 } from "../types";
 import { differenceInMinutes, fromJstDateTimeLocal } from "./date";
+import { normalizeSessionPlan, sessionPlanError } from "./sessionPlan";
 
 export interface TimecardReportFormValues {
   libraryId: string;
@@ -12,7 +13,7 @@ export interface TimecardReportFormValues {
   anxietyScore: number;
   fatigueScore: number;
   selfCriticismScore: number;
-  plannedTaskCreated: boolean;
+  plannedTaskCreated?: boolean;
   plannedTaskText: string;
   actualTaskText: string;
   completionStatus: CompletionStatus;
@@ -101,6 +102,8 @@ export function validateTimecardReport(
     errors.completionStatus = "終了状況を選択してください";
   }
 
+  const planError = sessionPlanError(values);
+  if (planError) errors.completionStatus = planError;
   return errors;
 }
 
@@ -124,10 +127,8 @@ export function parseTimecardReport(
     anxietyScore: values.anxietyScore,
     fatigueScore: values.fatigueScore,
     selfCriticismScore: values.selfCriticismScore,
-    plannedTaskCreated: values.plannedTaskCreated,
-    plannedTaskText: values.plannedTaskText.trim(),
+    ...normalizeSessionPlan(values),
     actualTaskText: values.actualTaskText.trim(),
-    completionStatus: values.completionStatus,
     note: values.note.trim(),
   };
 }

@@ -12,17 +12,15 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { requireFirestore } from "../lib/firebase";
+import { COMPLETION_STATUSES } from "../types";
 import type {
   ActiveSession,
   CompleteActiveSessionInput,
 } from "../types/activeSession";
 import { calculateActiveSessionStayMinutes } from "../utils/activeSession";
+import { normalizeSessionPlan } from "../utils/sessionPlan";
 
-const COMPLETION_STATUSES = new Set([
-  "on_schedule",
-  "mostly_on_schedule",
-  "off_schedule",
-]);
+const VALID_COMPLETION_STATUSES = new Set<string>(COMPLETION_STATUSES);
 
 export class ActiveSessionAlreadyExistsError extends Error {
   constructor() {
@@ -292,7 +290,7 @@ function validatedCompletedSession(input: CompleteActiveSessionInput) {
     );
   }
 
-  if (!COMPLETION_STATUSES.has(input.completionStatus)) {
+  if (!VALID_COMPLETION_STATUSES.has(input.completionStatus)) {
     throw new InvalidActiveSessionDataError("終了状況を選択してください。");
   }
 
@@ -307,10 +305,8 @@ function validatedCompletedSession(input: CompleteActiveSessionInput) {
       anxietyScore: input.anxietyScore,
       fatigueScore: input.fatigueScore,
       selfCriticismScore: input.selfCriticismScore,
-      plannedTaskCreated: input.plannedTaskCreated,
-      plannedTaskText: input.plannedTaskText.trim(),
+      ...normalizeSessionPlan(input),
       actualTaskText: input.actualTaskText.trim(),
-      completionStatus: input.completionStatus,
       note: input.note.trim(),
     },
   };

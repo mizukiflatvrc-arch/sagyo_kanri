@@ -196,6 +196,30 @@ service cloud.firestore {
         && changed.hasOnly(["exitStartedAt", "updatedAt"]);
     }
 
+    function hasConsistentSessionPlan(data) {
+      return (
+          data.plannedTaskCreated == false
+          && data.plannedTaskText == ""
+          && data.completionStatus == "not_planned"
+        ) || (
+          data.plannedTaskCreated == true
+          // Match JavaScript String.trim whitespace, including full-width
+          // spaces and BOM. Rules String.trim does not cover the same set.
+          && !data.plannedTaskText.matches(
+            "[\\x{0009}-\\x{000D}\\x{0020}\\x{00A0}\\x{1680}\\x{2000}-\\x{200A}\\x{2028}\\x{2029}\\x{202F}\\x{205F}\\x{3000}\\x{FEFF}]*"
+          )
+          && data.completionStatus in [
+            "on_schedule", "mostly_on_schedule", "off_schedule"
+          ]
+        );
+    }
+
+    function preservesSessionPlan(before, after) {
+      return !after.diff(before).affectedKeys().hasAny([
+        "plannedTaskCreated", "plannedTaskText", "completionStatus"
+      ]);
+    }
+
     function isValidSession(data, userId) {
       return data.keys().hasAll([
           "userId",
@@ -266,6 +290,7 @@ service cloud.firestore {
         && isCurrentText(data.plannedTaskText)
         && isCurrentText(data.actualTaskText)
         && data.completionStatus in [
+          "not_planned",
           "on_schedule",
           "mostly_on_schedule",
           "off_schedule"
@@ -423,6 +448,7 @@ service cloud.firestore {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId)
                     && isValidSession(request.resource.data, userId)
+                    && hasConsistentSessionPlan(request.resource.data)
                     && isNotDeleting(request.resource.data)
                     && request.resource.data.version == 1
                     && request.resource.data.createdAt == request.time
@@ -435,6 +461,10 @@ service cloud.firestore {
                     && (
                       (
                         isValidSession(request.resource.data, userId)
+                        && (
+                          preservesSessionPlan(resource.data, request.resource.data)
+                          || hasConsistentSessionPlan(request.resource.data)
+                        )
                         && isNotDeleting(resource.data)
                         && isNotDeleting(request.resource.data)
                         && request.resource.data.userId

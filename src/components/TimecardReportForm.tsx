@@ -51,6 +51,10 @@ export function TimecardReportForm({
   const [isDirty, setIsDirty] = useState(false);
   const confirmDiscard = useUnsavedChanges(isDirty);
   const messages = errorMessages(errors);
+  const hasPlan = values.plannedTaskText.trim() !== "";
+  const completionOptions = COMPLETION_STATUS_OPTIONS.filter((option) =>
+    hasPlan ? option.value !== "not_planned" : option.value === "not_planned",
+  );
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -71,6 +75,9 @@ export function TimecardReportForm({
     value: TimecardReportFormValues[K],
   ) {
     const next = { ...values, [field]: value };
+    if (field === "plannedTaskText" && next.plannedTaskText.trim() === "") {
+      next.completionStatus = "not_planned";
+    }
     setValues(next);
     setIsDirty(true);
     if (Object.keys(errors).length > 0) {
@@ -272,58 +279,11 @@ export function TimecardReportForm({
       </fieldset>
 
       <fieldset className="form-section" disabled={isSaving}>
-        <legend>タスク</legend>
+        <legend>作業内容</legend>
         <div className="form-grid form-grid--single">
-          <div
-            className="field choice-group"
-            role="group"
-            aria-labelledby={id("planned-task-label")}
-          >
-            <p className="field-label" id={id("planned-task-label")}>
-              予定タスクを作成しましたか
-            </p>
-            <div className="choice-grid choice-list choice-list--inline">
-              <div className="choice-card choice-option">
-                <input
-                  id={id("planned-yes")}
-                  type="radio"
-                  name="plannedTaskCreated"
-                  checked={values.plannedTaskCreated}
-                  onChange={() => updateField("plannedTaskCreated", true)}
-                />
-                <label htmlFor={id("planned-yes")}>はい</label>
-              </div>
-              <div className="choice-card choice-option">
-                <input
-                  id={id("planned-no")}
-                  type="radio"
-                  name="plannedTaskCreated"
-                  checked={!values.plannedTaskCreated}
-                  onChange={() => updateField("plannedTaskCreated", false)}
-                />
-                <label htmlFor={id("planned-no")}>いいえ</label>
-              </div>
-            </div>
-          </div>
-
-          <div className="field">
-            <label htmlFor={id("planned-text")}>
-              予定タスク <span className="optional-label">（任意）</span>
-            </label>
-            <textarea
-              className="textarea"
-              id={id("planned-text")}
-              value={values.plannedTaskText}
-              onChange={(event) =>
-                updateField("plannedTaskText", event.target.value)
-              }
-              rows={3}
-            />
-          </div>
-
           <div className="field">
             <label htmlFor={id("actual-text")}>
-              実際の作業内容 <span className="optional-label">（任意）</span>
+              今日やったこと <span className="optional-label">（任意）</span>
             </label>
             <textarea
               className="textarea"
@@ -332,14 +292,43 @@ export function TimecardReportForm({
               onChange={(event) =>
                 updateField("actualTaskText", event.target.value)
               }
+              placeholder="コードの実装、仕様の整理、調べ物など、取り組んだことを自由に記録できます"
               rows={4}
             />
           </div>
+
+          <details
+            className="optional-details"
+            open={Boolean(values.plannedTaskText)}
+          >
+            <summary className="optional-details__summary">
+              事前に予定していたタスクがあれば入力する
+            </summary>
+            <div className="field" style={{ marginTop: "0.75rem" }}>
+              <label htmlFor={id("planned-text")}>
+                予定タスク <span className="optional-label">（任意）</span>
+              </label>
+              <textarea
+                className="textarea"
+                id={id("planned-text")}
+                value={values.plannedTaskText}
+                onChange={(event) =>
+                  updateField("plannedTaskText", event.target.value)
+                }
+                rows={3}
+              />
+            </div>
+          </details>
         </div>
       </fieldset>
 
       <fieldset className="form-section" disabled={isSaving}>
         <legend>終了状況</legend>
+        <p className="form-section__hint field-help field-hint">
+          {hasPlan
+            ? "予定タスクに対する終了状況を選択してください。"
+            : "予定を決めずに作業した場合は「予定なし」のままで構いません。"}
+        </p>
         <div
           className="choice-grid choice-list"
           aria-invalid={errors.completionStatus ? true : undefined}
@@ -347,14 +336,14 @@ export function TimecardReportForm({
             errors.completionStatus ? id("completion-error") : undefined
           }
         >
-          {COMPLETION_STATUS_OPTIONS.map((option) => (
+          {completionOptions.map((option) => (
             <div className="choice-card choice-option" key={option.value}>
               <input
                 id={id(`completion-${option.value}`)}
                 type="radio"
                 name="completionStatus"
                 value={option.value}
-                checked={values.completionStatus === option.value}
+                checked={hasPlan ? values.completionStatus === option.value : option.value === "not_planned"}
                 onChange={() =>
                   updateField("completionStatus", option.value)
                 }

@@ -213,6 +213,70 @@ describe("Firestore security rules", () => {
     await testEnvironment.cleanup();
   });
 
+  it.each([
+    [false, "", "not_planned", true],
+    [true, "仕様書を書く", "on_schedule", true],
+    [true, "仕様書を書く", "mostly_on_schedule", true],
+    [true, "仕様書を書く", "off_schedule", true],
+    [false, "", "on_schedule", false],
+    [true, "仕様書を書く", "not_planned", false],
+    [true, "", "on_schedule", false],
+    [true, "   ", "on_schedule", false],
+    [true, "\t\n　", "on_schedule", false],
+    [true, "\uFEFF\u00A0\u1680\u2000\u200A\u2028\u2029\u202F\u205F", "on_schedule", false],
+    [true, "仕様書を書く\nレビューする", "on_schedule", true],
+    [false, "仕様書を書く", "not_planned", false],
+  ])("新規予定状態 (%s, %j, %s) の許可=%s", async (plannedTaskCreated, plannedTaskText, completionStatus, allowed) => {
+    const firestore = testEnvironment.authenticatedContext(OWNER_UID).firestore();
+    await setDoc(doc(firestore, `users/${OWNER_UID}/libraries/library-1`), validLibraryDocument(OWNER_UID));
+    const write = setDoc(doc(firestore, `users/${OWNER_UID}/sessions/plan`), {
+      ...validSessionDocument(OWNER_UID), plannedTaskCreated, plannedTaskText, completionStatus,
+    });
+    await (allowed ? assertSucceeds(write) : assertFails(write));
+  });
+
+  it.each([true, false])("旧形式の予定情報 (%s, 空文字, on_schedule) を維持して通常編集・翌日反応・revisionを保存できる", async (plannedTaskCreated) => {
+    const firestore = testEnvironment.authenticatedContext(OWNER_UID).firestore();
+    const path = `users/${OWNER_UID}/sessions/legacy-plan`;
+    const reference = doc(firestore, path);
+    await testEnvironment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `users/${OWNER_UID}/libraries/library-1`), validLibraryDocument(OWNER_UID));
+      await setDoc(doc(context.firestore(), path), {
+        ...validSessionDocument(OWNER_UID), plannedTaskCreated, plannedTaskText: "", completionStatus: "on_schedule",
+      });
+    });
+    const updates = [
+      { actualTaskText: "実装した", concentrationScore: 8, note: "通常編集" },
+      { nextDayReaction: "mild", nextDayNote: "翌日メモ" },
+    ];
+    for (const updatesForStep of updates) {
+      const before = (await getDoc(reference)).data() ?? {};
+      const batch = writeBatch(firestore);
+      batch.set(doc(firestore, `${path}/revisions/${before.version}`), validRevisionDocument(
+        "legacy-plan", before.version, before, Object.keys(updatesForStep),
+      ));
+      batch.update(reference, { ...updatesForStep, version: before.version + 1, updatedAt: serverTimestamp() });
+      await assertSucceeds(batch.commit());
+    }
+  });
+
+  it.each([
+    ["矛盾する予定変更", { plannedTaskCreated: false }, ["plannedTaskCreated"], false],
+    ["予定なしへの変更", { plannedTaskCreated: false, plannedTaskText: "", completionStatus: "not_planned" }, ["plannedTaskCreated", "plannedTaskText", "completionStatus"], true],
+    ["変更していない予定項目を含む履歴", { note: "メモ変更" }, ["note", "plannedTaskCreated"], false],
+  ] as const)("%sを検証する", async (_label, update, fields, allowed) => {
+    const firestore = testEnvironment.authenticatedContext(OWNER_UID).firestore();
+    const path = `users/${OWNER_UID}/sessions/plan-edit`;
+    const reference = doc(firestore, path);
+    await setDoc(doc(firestore, `users/${OWNER_UID}/libraries/library-1`), validLibraryDocument(OWNER_UID));
+    await setDoc(reference, validSessionDocument(OWNER_UID));
+    const before = (await getDoc(reference)).data() ?? {};
+    const batch = writeBatch(firestore);
+    batch.set(doc(firestore, `${path}/revisions/1`), validRevisionDocument("plan-edit", 1, before, [...fields]));
+    batch.update(reference, { ...update, version: 2, updatedAt: serverTimestamp() });
+    await (allowed ? assertSucceeds(batch.commit()) : assertFails(batch.commit()));
+  });
+
   it("未認証ユーザーの読み書きを拒否する", async () => {
     const firestore = testEnvironment.unauthenticatedContext().firestore();
     await seedProtectedDocuments(OWNER_UID);
@@ -525,6 +589,26 @@ describe("Firestore security rules", () => {
         {
           ...withoutActualWork,
           selfCriticismMinutes: 121,
+        },
+      ),
+    );
+    await assertSucceeds(
+      setDoc(
+        doc(firestore, `users/${OWNER_UID}/sessions/not-planned-session`),
+        {
+          ...validSessionDocument(OWNER_UID),
+          completionStatus: "not_planned",
+          plannedTaskCreated: false,
+          plannedTaskText: "",
+        },
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(firestore, `users/${OWNER_UID}/sessions/invalid-completion-status`),
+        {
+          ...validSessionDocument(OWNER_UID),
+          completionStatus: "invalid_status",
         },
       ),
     );

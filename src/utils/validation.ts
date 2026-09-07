@@ -10,6 +10,7 @@ import {
 } from "../types";
 import { differenceInMinutes, fromJstDateTimeLocal } from "./date";
 import { partsToMinutes } from "./format";
+import { normalizeSessionPlan, sessionPlanError } from "./sessionPlan";
 
 const SCORE_MIN = 0;
 const SCORE_MAX = 10;
@@ -80,6 +81,7 @@ function validateUrl(value: string): boolean {
 
 export function validateSessionForm(
   values: SessionFormValues,
+  planMode: "normalize" | "preserve" = "normalize",
 ): SessionFormErrors {
   const errors: SessionFormErrors = {};
 
@@ -123,6 +125,8 @@ export function validateSessionForm(
   if (!isMemberOf(COMPLETION_STATUSES, values.completionStatus)) {
     errors.completionStatus = "終了状況を選択してください";
   }
+  const planError = planMode === "normalize" ? sessionPlanError(values) : undefined;
+  if (planError) errors.completionStatus = planError;
   if (!isMemberOf(NEXT_DAY_REACTIONS, values.nextDayReaction)) {
     errors.nextDayReaction = "翌日の反動を選択してください";
   }
@@ -183,8 +187,9 @@ export function hasValidationErrors<T extends object>(
  */
 export function parseSessionForm(
   values: SessionFormValues,
+  planMode: "normalize" | "preserve" = "normalize",
 ): ParsedSessionFormValues | null {
-  if (hasValidationErrors(validateSessionForm(values))) {
+  if (hasValidationErrors(validateSessionForm(values, planMode))) {
     return null;
   }
 
@@ -207,10 +212,14 @@ export function parseSessionForm(
     anxietyScore: values.anxietyScore,
     fatigueScore: values.fatigueScore,
     selfCriticismScore: values.selfCriticismScore,
-    plannedTaskCreated: values.plannedTaskCreated,
-    plannedTaskText: values.plannedTaskText.trim(),
+    ...(planMode === "normalize"
+      ? normalizeSessionPlan(values)
+      : {
+          plannedTaskCreated: values.plannedTaskCreated,
+          plannedTaskText: values.plannedTaskText,
+          completionStatus: values.completionStatus,
+        }),
     actualTaskText: values.actualTaskText.trim(),
-    completionStatus: values.completionStatus,
     nextDayReaction: values.nextDayReaction,
     nextDayNote: values.nextDayNote.trim(),
     note: values.note.trim(),

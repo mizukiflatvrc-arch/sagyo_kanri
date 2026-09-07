@@ -247,6 +247,17 @@ Firestore処理は画面から分離しています。
 - 新しい順の一覧、詳細、編集、削除
 - 期間、図書館、翌日の反動、終了状況で絞り込み
 
+日報・手動作成とも「今日やったこと / 取り組んだこと」を中心にし、予定は
+`<details>`内で任意入力します。予定内容が空白だけなら、保存時に
+`plannedTaskCreated: false`、`plannedTaskText: ""`、`completionStatus: "not_planned"`
+へ揃えます。予定がある場合は作成フラグを`true`にし、3種類の終了状況から
+選択するまで保存しません。両経路の保存処理は`src/utils/sessionPlan.ts`を使います。
+
+既存記録は読み込み時に正規化しません。通常編集では予定情報の明示的な変更だけを
+`updateSession()`の第5引数へ渡し、それ以外の予定情報はtransactionで読んだ最新値を
+保持します。旧UIで保存できた「予定作成済み・内容なし」なども維持します。
+翌日反応の更新も同様です。revisionには実際に変更された項目だけを記録します。
+
 主な入力検証:
 
 - 入室日時より退室日時が後
@@ -291,6 +302,8 @@ Firestore処理は画面から分離しています。
 - 認証済みユーザーでも他ユーザーのパスは拒否
 - 認証済み本人の`libraries`、`activeSession/current`、`sessions`、`revisions`だけ許可
 - 保存データのキー、型、値域、Timestampを検証
+- 新規セッションの予定フラグ・内容・終了状況の整合性を検証（空白判定もアプリと共通）
+- 更新では旧形式の予定情報の保持を許可し、予定情報を変更する場合だけ新しい整合性制約を適用
 - セッション更新と更新前スナップショットの同時書き込みを強制
 - 論理削除済み図書館への新しい参照を拒否
 - その他のコレクションは全拒否
@@ -369,6 +382,8 @@ firebase deploy --only hosting --project <project-id>
 ```bash
 npm run dev        # 開発サーバー
 npm test           # バリデーション等のユニットテスト
+npm run lint       # ESLintでアプリ・テストを検証
+npm run typecheck  # strict型検査
 npm run build      # strict型検査 + 本番ビルド
 npm run preview    # distのローカル確認
 npm run test:rules # Firestore Emulatorでルールテスト

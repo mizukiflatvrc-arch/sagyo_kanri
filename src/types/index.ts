@@ -1,4 +1,5 @@
 export const COMPLETION_STATUSES = [
+  "not_planned",
   "on_schedule",
   "mostly_on_schedule",
   "off_schedule",

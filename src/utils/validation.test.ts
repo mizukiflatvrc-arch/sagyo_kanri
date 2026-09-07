@@ -108,6 +108,32 @@ describe("validateSessionForm", () => {
 });
 
 describe("form parsing", () => {
+  it.each(["", "   ", "\t\n　"])("normalizes an empty plan %j", (plannedTaskText) => {
+    expect(parseSessionForm(validSessionForm({
+      plannedTaskCreated: true,
+      plannedTaskText,
+      completionStatus: "on_schedule",
+    }))).toMatchObject({
+      plannedTaskCreated: false,
+      plannedTaskText: "",
+      completionStatus: "not_planned",
+    });
+  });
+
+  it("requires a completion choice when a plan is supplied", () => {
+    const values = validSessionForm({ plannedTaskText: "仕様書を書く" });
+    expect(validateSessionForm(values).completionStatus).toBeDefined();
+    expect(parseSessionForm(values)).toBeNull();
+  });
+
+  it.each([true, false])("preserves historical plan fields in edit parsing (%s)", (plannedTaskCreated) => {
+    const values = validSessionForm({ plannedTaskCreated, completionStatus: "on_schedule" });
+    expect(parseSessionForm(values, "preserve")).toMatchObject({
+      plannedTaskCreated,
+      plannedTaskText: "",
+      completionStatus: "on_schedule",
+    });
+  });
   it("parses duration parts without treating empty values as zero", () => {
     expect(parseDurationParts("1", "20")).toBe(80);
     expect(parseDurationParts("", "20")).toBeNull();
@@ -126,6 +152,28 @@ describe("form parsing", () => {
 
   it("returns null for invalid form values", () => {
     expect(parseSessionForm(validSessionForm({ libraryId: "" }))).toBeNull();
+  });
+
+  it("parses not_planned completion status and determines plannedTaskCreated automatically", () => {
+    const parsedWithoutPlan = parseSessionForm(
+      validSessionForm({
+        completionStatus: "not_planned",
+        plannedTaskText: "",
+        actualTaskText: "作業ログの改善",
+      }),
+    );
+    expect(parsedWithoutPlan?.completionStatus).toBe("not_planned");
+    expect(parsedWithoutPlan?.plannedTaskCreated).toBe(false);
+    expect(parsedWithoutPlan?.actualTaskText).toBe("作業ログの改善");
+
+    const parsedWithPlan = parseSessionForm(
+      validSessionForm({
+        completionStatus: "on_schedule",
+        plannedTaskText: "テスト作成",
+        actualTaskText: "テスト作成完了",
+      }),
+    );
+    expect(parsedWithPlan?.plannedTaskCreated).toBe(true);
   });
 });
 

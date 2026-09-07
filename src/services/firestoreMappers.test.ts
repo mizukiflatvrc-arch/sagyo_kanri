@@ -59,6 +59,22 @@ describe("mapSessionDocument", () => {
     expect(session.selfCriticismMinutes).toBe(24);
   });
 
+  it("予定なし(not_planned)の終了状況を正しく読み込める", () => {
+    const session = mapSessionDocument(
+      sessionSnapshot({
+        completionStatus: "not_planned",
+        plannedTaskCreated: false,
+        plannedTaskText: "",
+        actualTaskText: "コードを書いた",
+      }),
+    );
+
+    expect(session.completionStatus).toBe("not_planned");
+    expect(session.plannedTaskCreated).toBe(false);
+    expect(session.plannedTaskText).toBe("");
+    expect(session.actualTaskText).toBe("コードを書いた");
+  });
+
   it.each([null, "80", Number.NaN])(
     "実作業時間の不正値 %s を拒否する",
     (actualWorkMinutes) => {
