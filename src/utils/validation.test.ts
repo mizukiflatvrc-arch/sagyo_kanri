@@ -108,6 +108,32 @@ describe("validateSessionForm", () => {
 });
 
 describe("form parsing", () => {
+  it.each(["", "   ", "\t\n　"])("normalizes an empty plan %j", (plannedTaskText) => {
+    expect(parseSessionForm(validSessionForm({
+      plannedTaskCreated: true,
+      plannedTaskText,
+      completionStatus: "on_schedule",
+    }))).toMatchObject({
+      plannedTaskCreated: false,
+      plannedTaskText: "",
+      completionStatus: "not_planned",
+    });
+  });
+
+  it("requires a completion choice when a plan is supplied", () => {
+    const values = validSessionForm({ plannedTaskText: "仕様書を書く" });
+    expect(validateSessionForm(values).completionStatus).toBeDefined();
+    expect(parseSessionForm(values)).toBeNull();
+  });
+
+  it.each([true, false])("preserves historical plan fields in edit parsing (%s)", (plannedTaskCreated) => {
+    const values = validSessionForm({ plannedTaskCreated, completionStatus: "on_schedule" });
+    expect(parseSessionForm(values, "preserve")).toMatchObject({
+      plannedTaskCreated,
+      plannedTaskText: "",
+      completionStatus: "on_schedule",
+    });
+  });
   it("parses duration parts without treating empty values as zero", () => {
     expect(parseDurationParts("1", "20")).toBe(80);
     expect(parseDurationParts("", "20")).toBeNull();

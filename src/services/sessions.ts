@@ -28,6 +28,7 @@ import {
 import { ConcurrentEditError } from "./errors";
 import { LEGACY_RECORD_MESSAGE } from "./legacyRecords";
 import type { ExportSessionRecord } from "../utils/export";
+import { normalizeSessionPlan, type SessionPlanChanges } from "../utils/sessionPlan";
 
 const EDITABLE_KEYS = [
   "libraryId",
@@ -153,7 +154,7 @@ export async function createSession(
   input: EditableLibrarySessionFields,
 ): Promise<string> {
   const reference = await addDoc(sessionsCollection(userId), {
-    ...sessionPayload(input),
+    ...sessionPayload({ ...input, ...normalizeSessionPlan(input) }),
     userId,
     version: 1,
     deleting: false,
@@ -240,12 +241,22 @@ export async function updateSession(
   sessionId: string,
   input: EditableLibrarySessionFields,
   expectedUpdatedAt?: Date,
+  planChanges: SessionPlanChanges = {},
 ): Promise<void> {
   await updateWithRevision(
     userId,
     sessionId,
     (current) => ({
       ...input,
+      // Plan edits are explicit. All other saves keep the latest stored trio,
+      // including valid historical combinations that new sessions cannot use.
+      ...(Object.keys(planChanges).length > 0
+        ? normalizeSessionPlan({ ...current, ...planChanges })
+        : {
+            plannedTaskCreated: current.plannedTaskCreated,
+            plannedTaskText: current.plannedTaskText,
+            completionStatus: current.completionStatus,
+          }),
       // The next-day fields are edited on a separate screen. Preserve the
       // latest transaction value instead of overwriting it with hidden form
       // state from an older render.

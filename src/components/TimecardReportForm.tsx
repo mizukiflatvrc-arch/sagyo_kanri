@@ -51,6 +51,10 @@ export function TimecardReportForm({
   const [isDirty, setIsDirty] = useState(false);
   const confirmDiscard = useUnsavedChanges(isDirty);
   const messages = errorMessages(errors);
+  const hasPlan = values.plannedTaskText.trim() !== "";
+  const completionOptions = COMPLETION_STATUS_OPTIONS.filter((option) =>
+    hasPlan ? option.value !== "not_planned" : option.value === "not_planned",
+  );
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -71,6 +75,9 @@ export function TimecardReportForm({
     value: TimecardReportFormValues[K],
   ) {
     const next = { ...values, [field]: value };
+    if (field === "plannedTaskText" && next.plannedTaskText.trim() === "") {
+      next.completionStatus = "not_planned";
+    }
     setValues(next);
     setIsDirty(true);
     if (Object.keys(errors).length > 0) {
@@ -318,7 +325,9 @@ export function TimecardReportForm({
       <fieldset className="form-section" disabled={isSaving}>
         <legend>終了状況</legend>
         <p className="form-section__hint field-help field-hint">
-          予定を決めずに作業した場合は「予定なし」のままで構いません。
+          {hasPlan
+            ? "予定タスクに対する終了状況を選択してください。"
+            : "予定を決めずに作業した場合は「予定なし」のままで構いません。"}
         </p>
         <div
           className="choice-grid choice-list"
@@ -327,14 +336,14 @@ export function TimecardReportForm({
             errors.completionStatus ? id("completion-error") : undefined
           }
         >
-          {COMPLETION_STATUS_OPTIONS.map((option) => (
+          {completionOptions.map((option) => (
             <div className="choice-card choice-option" key={option.value}>
               <input
                 id={id(`completion-${option.value}`)}
                 type="radio"
                 name="completionStatus"
                 value={option.value}
-                checked={values.completionStatus === option.value}
+                checked={hasPlan ? values.completionStatus === option.value : option.value === "not_planned"}
                 onChange={() =>
                   updateField("completionStatus", option.value)
                 }

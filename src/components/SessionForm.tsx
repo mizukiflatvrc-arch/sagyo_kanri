@@ -24,13 +24,17 @@ import {
 } from "../utils/validation";
 import { ScoreField } from "./ScoreField";
 import { useUnsavedChanges } from "../hooks/useUnsavedChanges";
+import { sessionPlanChanges, type SessionPlanChanges } from "../utils/sessionPlan";
 
 export interface SessionFormProps {
   initialValues: SessionFormValues;
   libraries: Library[];
   mode: "create" | "edit";
   isSaving: boolean;
-  onSubmit: (values: EditableLibrarySessionFields) => void | Promise<void>;
+  onSubmit: (
+    values: EditableLibrarySessionFields,
+    planChanges?: SessionPlanChanges,
+  ) => void | Promise<void>;
   onCancel: () => void;
 }
 
@@ -59,9 +63,27 @@ export function SessionForm({
   const errorSummaryRef = useRef<HTMLElement>(null);
   const shouldFocusErrors = useRef(false);
   const [values, setValues] = useState<SessionFormValues>(initialValues);
+  // A subscription can refresh props while the user is editing. Compare with
+  // the form's original values, not a later render's initialValues.
+  const initialPlan = useRef(initialValues);
   const [errors, setErrors] = useState<SessionFormErrors>({});
   const [isDirty, setIsDirty] = useState(false);
   const confirmDiscard = useUnsavedChanges(isDirty);
+  const planChanges = sessionPlanChanges(initialPlan.current, values);
+  const preservePlan = mode === "edit" && Object.keys(planChanges).length === 0;
+  const completionOptions = COMPLETION_STATUS_OPTIONS.filter((option) =>
+    (values.plannedTaskText.trim() === ""
+      ? option.value === "not_planned"
+      : option.value !== "not_planned") ||
+    (preservePlan && option.value === values.completionStatus),
+  );
+
+  function planMode(next: SessionFormValues) {
+    return mode === "edit" &&
+      Object.keys(sessionPlanChanges(initialPlan.current, next)).length === 0
+      ? "preserve" as const
+      : "normalize" as const;
+  }
 
   const messages = errorMessages(errors);
   useEffect(() => {
@@ -85,10 +107,13 @@ export function SessionForm({
     value: SessionFormValues[K],
   ) {
     const nextValues: SessionFormValues = { ...values, [field]: value };
+    if (field === "plannedTaskText" && nextValues.plannedTaskText.trim() === "") {
+      nextValues.completionStatus = "not_planned";
+    }
     setValues(nextValues);
     setIsDirty(true);
     if (hasValidationErrors(errors)) {
-      setErrors(validateSessionForm(nextValues));
+      setErrors(validateSessionForm(nextValues, planMode(nextValues)));
     }
   }
 
@@ -96,7 +121,7 @@ export function SessionForm({
     event.preventDefault();
     if (isSaving) return;
 
-    const nextErrors = validateSessionForm(values);
+    const nextErrors = validateSessionForm(values, planMode(values));
     setErrors(nextErrors);
     if (hasValidationErrors(nextErrors)) {
       shouldFocusErrors.current = true;
@@ -104,9 +129,9 @@ export function SessionForm({
       return;
     }
 
-    const parsed = parseSessionForm(values);
+    const parsed = parseSessionForm(values, planMode(values));
     if (parsed !== null) {
-      onSubmit(parsed);
+      onSubmit(parsed, mode === "edit" ? planChanges : undefined);
     }
   }
 
@@ -377,7 +402,11 @@ export function SessionForm({
           className="form-section__hint field-help field-hint"
           id={`${completionStatusId}-hint`}
         >
-          予定を決めずに作業した場合は「予定なし」のままで構いません。
+          {values.plannedTaskText.trim() !== ""
+            ? "予定タスクに対する終了状況を選択してください。"
+            : preservePlan && values.completionStatus !== "not_planned"
+              ? "保存済みの終了状況を表示しています。予定情報を変更しなければ、そのまま保持します。"
+              : "予定を決めずに作業した場合は「予定なし」のままで構いません。"}
         </p>
         <div
           className="choice-grid choice-list"
@@ -387,14 +416,16 @@ export function SessionForm({
           )}
           aria-invalid={errors.completionStatus ? true : undefined}
         >
-          {COMPLETION_STATUS_OPTIONS.map((option) => (
+          {completionOptions.map((option) => (
             <div className="choice-card choice-option" key={option.value}>
               <input
                 id={`${completionStatusId}-${option.value}`}
                 type="radio"
                 name="completionStatus"
                 value={option.value}
-                checked={values.completionStatus === option.value}
+                checked={!preservePlan && values.plannedTaskText.trim() === ""
+                  ? option.value === "not_planned"
+                  : values.completionStatus === option.value}
                 onChange={() =>
                   updateField("completionStatus", option.value)
                 }

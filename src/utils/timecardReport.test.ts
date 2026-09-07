@@ -68,7 +68,7 @@ describe("validateTimecardReport", () => {
   });
 
   it("予定なし(not_planned)の終了状況を受け入れる", () => {
-    const values = { ...validValues(), completionStatus: "not_planned" as const };
+    const values = { ...validValues(), plannedTaskText: "", completionStatus: "not_planned" as const };
     expect(validateTimecardReport(values).completionStatus).toBeUndefined();
     expect(parseTimecardReport(values)?.completionStatus).toBe("not_planned");
   });
@@ -82,6 +82,7 @@ describe("validateTimecardReport", () => {
     const parsed = parseTimecardReport(values);
     expect(parsed?.plannedTaskCreated).toBe(false);
     expect(parsed?.plannedTaskText).toBe("");
+    expect(parsed?.completionStatus).toBe("not_planned");
     expect(parsed?.actualTaskText).toBe("コードを書いた");
   });
 
@@ -102,5 +103,11 @@ describe("validateTimecardReport", () => {
     };
     expect(validateTimecardReport(values)).toEqual({});
     expect(parseTimecardReport(values)?.actualTaskText).toBe("");
+  });
+
+  it("予定ありでnot_plannedのままなら終了状況の選択を求める", () => {
+    const values = { ...validValues(), completionStatus: "not_planned" as const };
+    expect(validateTimecardReport(values).completionStatus).toBeDefined();
+    expect(parseTimecardReport(values)).toBeNull();
   });
 });

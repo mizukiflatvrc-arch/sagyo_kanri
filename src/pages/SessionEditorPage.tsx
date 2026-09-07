@@ -12,6 +12,7 @@ import { createEmptySessionFormValues, sessionToFormValues } from "../utils/form
 import { createSession, updateSession } from "../services/sessions";
 import { toUserMessage } from "../utils/errors";
 import { LEGACY_RECORD_MESSAGE } from "../services/legacyRecords";
+import type { SessionPlanChanges } from "../utils/sessionPlan";
 
 export function SessionEditorPage() {
   const { sessionId } = useParams();
@@ -88,7 +89,10 @@ export function SessionEditorPage() {
     );
   }
 
-  const handleSubmit = async (values: EditableLibrarySessionFields) => {
+  const handleSubmit = async (
+    values: EditableLibrarySessionFields,
+    planChanges?: SessionPlanChanges,
+  ) => {
     if (!user) return;
     if (
       target?.selfCriticismMinutes !== undefined &&
@@ -118,6 +122,7 @@ export function SessionEditorPage() {
           sessionId,
           values,
           editBase.current?.updatedAt,
+          planChanges,
         );
         showToast("記録を更新しました", "success");
         navigate(`/sessions/${sessionId}`, { replace: true });

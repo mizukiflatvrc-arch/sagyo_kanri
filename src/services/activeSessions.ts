@@ -18,6 +18,7 @@ import type {
   CompleteActiveSessionInput,
 } from "../types/activeSession";
 import { calculateActiveSessionStayMinutes } from "../utils/activeSession";
+import { normalizeSessionPlan } from "../utils/sessionPlan";
 
 const VALID_COMPLETION_STATUSES = new Set<string>(COMPLETION_STATUSES);
 
@@ -304,10 +305,8 @@ function validatedCompletedSession(input: CompleteActiveSessionInput) {
       anxietyScore: input.anxietyScore,
       fatigueScore: input.fatigueScore,
       selfCriticismScore: input.selfCriticismScore,
-      plannedTaskCreated: input.plannedTaskCreated,
-      plannedTaskText: input.plannedTaskText.trim(),
+      ...normalizeSessionPlan(input),
       actualTaskText: input.actualTaskText.trim(),
-      completionStatus: input.completionStatus,
       note: input.note.trim(),
     },
   };
