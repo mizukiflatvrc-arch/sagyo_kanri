@@ -1,18 +1,38 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ExportSessionRecord } from "../utils/export";
+import type { ReportSessionRecord } from "../report/types";
 
-const { getSessionsForExportMock } = vi.hoisted(() => ({
-  getSessionsForExportMock: vi.fn(),
+const mocks = vi.hoisted(() => ({
+  getSessionsForReport: vi.fn(),
+  createReportPdfBlob: vi.fn(),
+  downloadPdfBlob: vi.fn(),
+  reportPdfFilename: vi.fn(),
+  getIdToken: vi.fn(),
 }));
 
 vi.mock("../contexts/AuthContext", () => ({
-  useAuth: () => ({ user: { uid: "export-user" } }),
+  useAuth: () => ({
+    user: { uid: "export-user", getIdToken: mocks.getIdToken },
+  }),
+}));
+
+vi.mock("../contexts/DataContext", () => ({
+  useData: () => ({
+    libraryById: new Map([
+      ["central", { id: "central", name: "中央図書館" }],
+    ]),
+  }),
 }));
 
 vi.mock("../services/sessions", () => ({
-  getSessionsForExport: getSessionsForExportMock,
+  getSessionsForReport: mocks.getSessionsForReport,
+}));
+
+vi.mock("../report/pdf", () => ({
+  createReportPdfBlob: mocks.createReportPdfBlob,
+  downloadPdfBlob: mocks.downloadPdfBlob,
+  reportPdfFilename: mocks.reportPdfFilename,
 }));
 
 import { ExportPage } from "./ExportPage";
@@ -20,14 +40,17 @@ import { ExportPage } from "./ExportPage";
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
   .IS_REACT_ACT_ENVIRONMENT = true;
 
-const RECORD: ExportSessionRecord = {
-  enteredAt: new Date("2026-08-10T01:15:00.000Z"),
-  exitedAt: new Date("2026-08-10T03:30:00.000Z"),
+const RECORD: ReportSessionRecord = {
+  libraryId: "central",
+  enteredAt: new Date("2026-09-06T01:15:00.000Z"),
+  exitedAt: new Date("2026-09-06T03:30:00.000Z"),
   stayMinutes: 135,
   concentrationScore: 7,
   anxietyScore: 4,
   fatigueScore: 6,
   selfCriticismScore: 3,
+  actualTaskText: "レポートを実装した。",
+  note: "安定していた。",
 };
 
 function buttonByText(container: HTMLElement, text: string) {
@@ -38,19 +61,44 @@ function buttonByText(container: HTMLElement, text: string) {
   return button;
 }
 
+async function click(container: HTMLElement, text: string) {
+  await act(async () => {
+    buttonByText(container, text).click();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
+async function generateWithoutLlm(container: HTMLElement) {
+  const llm = container.querySelector<HTMLInputElement>("#report-llm-summary");
+  if (!llm) throw new Error("LLM switch not found");
+  act(() => llm.click());
+  await click(container, "PDF生成へ");
+  await click(container, "この内容で生成");
+}
+
 describe("ExportPage", () => {
   let root: Root;
   let container: HTMLDivElement;
   let originalClipboard: PropertyDescriptor | undefined;
+  let originalCreateObjectUrl: typeof URL.createObjectURL | undefined;
 
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-08-15T12:00:00.000Z"));
-    getSessionsForExportMock.mockReset();
-    originalClipboard = Object.getOwnPropertyDescriptor(
-      navigator,
-      "clipboard",
+    vi.setSystemTime(new Date("2026-09-07T13:36:00.000Z"));
+    Object.values(mocks).forEach((mock) => mock.mockReset());
+    mocks.getSessionsForReport.mockResolvedValue([RECORD]);
+    mocks.createReportPdfBlob.mockResolvedValue(
+      new Blob(["pdf"], { type: "application/pdf" }),
     );
+    mocks.reportPdfFilename.mockReturnValue(
+      "hibi_report_2026-09-01_2026-09-07.pdf",
+    );
+    mocks.getIdToken.mockResolvedValue("token");
+    originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    originalCreateObjectUrl = URL.createObjectURL;
+    URL.createObjectURL = vi.fn(() => "blob:report-preview");
+    URL.revokeObjectURL = vi.fn();
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
@@ -65,121 +113,110 @@ describe("ExportPage", () => {
     } else {
       Reflect.deleteProperty(navigator, "clipboard");
     }
+    if (originalCreateObjectUrl) URL.createObjectURL = originalCreateObjectUrl;
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
-  it("未生成時はコピーと印刷を無効にし、取得中も生成ボタンを無効にする", async () => {
-    let resolveRequest: ((records: ExportSessionRecord[]) => void) | undefined;
-    getSessionsForExportMock.mockReturnValueOnce(
-      new Promise<ExportSessionRecord[]>((resolve) => {
-        resolveRequest = resolve;
-      }),
-    );
+  it("診察向けの既定値を設定し、生成前に対象と比較期間を確認する", async () => {
+    expect(container.querySelector<HTMLInputElement>("#report-target-date")?.value)
+      .toBe("2026-09-07");
+    expect(container.querySelector<HTMLInputElement>("#report-duration-days")?.value)
+      .toBe("7");
+    expect(container.querySelector<HTMLSelectElement>("#report-orientation")?.value)
+      .toBe("landscape");
+    expect(container.querySelector<HTMLInputElement>("#report-llm-summary")?.checked)
+      .toBe(true);
+    expect(container.querySelector<HTMLInputElement>("#report-library-comparison")?.checked)
+      .toBe(false);
+    expect(container.querySelector<HTMLInputElement>("#report-pdf-preview")?.checked)
+      .toBe(false);
 
-    expect(buttonByText(container, "Markdownをコピー").disabled).toBe(true);
-    expect(buttonByText(container, "印刷・PDF保存").disabled).toBe(true);
+    await click(container, "PDF生成へ");
 
-    act(() => buttonByText(container, "プレビューを生成").click());
-    expect(buttonByText(container, "生成しています").disabled).toBe(true);
-
-    await act(async () => {
-      resolveRequest?.([RECORD]);
-      await Promise.resolve();
-    });
+    expect(mocks.getSessionsForReport).not.toHaveBeenCalled();
+    const dialog = container.querySelector(".report-confirmation-list");
+    expect(dialog?.textContent).toContain("図書館作業レポート");
+    expect(dialog?.textContent).toContain("2026/9/1〜2026/9/7");
+    expect(dialog?.textContent).toContain("2026/8/25〜2026/8/31");
+    expect(dialog?.textContent).toContain("A4横");
   });
 
-  it("0件の場合も期間内の日付を表として表示する", async () => {
-    getSessionsForExportMock.mockResolvedValueOnce([]);
+  it("LLM OFFでは一度も要約を呼ばず、直接PDFを生成してMarkdownも維持する", async () => {
+    await generateWithoutLlm(container);
 
-    await act(async () => {
-      buttonByText(container, "プレビューを生成").click();
-      await Promise.resolve();
+    expect(mocks.getSessionsForReport).toHaveBeenCalledOnce();
+    const [, start, endExclusive] = mocks.getSessionsForReport.mock.calls[0]!;
+    expect(start.toISOString()).toBe("2026-08-24T15:00:00.000Z");
+    expect(endExclusive.toISOString()).toBe("2026-09-07T15:00:00.000Z");
+    expect(mocks.getIdToken).not.toHaveBeenCalled();
+    expect(mocks.createReportPdfBlob).toHaveBeenCalledOnce();
+    expect(mocks.createReportPdfBlob.mock.calls[0]?.[1]).toMatchObject({
+      orientation: "landscape",
+      includeLibraryComparison: false,
+      summary: null,
     });
+    expect(mocks.downloadPdfBlob).toHaveBeenCalledOnce();
+    expect(container.textContent).toContain("対象件数: 1件");
+    expect(container.textContent).toContain("09/06");
+  });
+
+  it("0件でも期間内の全日をMarkdownへ残しPDFを生成する", async () => {
+    mocks.getSessionsForReport.mockResolvedValueOnce([]);
+    await generateWithoutLlm(container);
 
     expect(container.textContent).toContain("対象件数: 0件");
-    expect(container.textContent).toContain("指定した期間に記録はありません");
+    expect(container.textContent).toContain("対象期間に記録はありません");
     expect(container.querySelector(".export-data-table--preview")).not.toBeNull();
     expect(container.textContent).toContain("---");
-    expect(buttonByText(container, "Markdownをコピー").disabled).toBe(false);
-    expect(buttonByText(container, "印刷・PDF保存").disabled).toBe(false);
+    expect(mocks.createReportPdfBlob).toHaveBeenCalledOnce();
   });
 
-  it("Markdown記法ではなく整形済みの表をプレビューする", async () => {
-    getSessionsForExportMock.mockResolvedValueOnce([RECORD]);
+  it("LLM未設定時はダイアログ通知後、要約なしで生成を続ける", async () => {
+    await click(container, "PDF生成へ");
+    await click(container, "この内容で生成");
 
-    await act(async () => {
-      buttonByText(container, "プレビューを生成").click();
-      await Promise.resolve();
+    expect(container.textContent).toContain("LLM要約の生成に失敗しました");
+    expect(mocks.createReportPdfBlob).not.toHaveBeenCalled();
+
+    await click(container, "要約なしで続ける");
+
+    expect(mocks.createReportPdfBlob).toHaveBeenCalledOnce();
+    expect(mocks.createReportPdfBlob.mock.calls[0]?.[1]).toMatchObject({
+      summary: null,
     });
-
-    const table = container.querySelector<HTMLTableElement>(
-      ".export-data-table--preview",
-    );
-    expect(table).not.toBeNull();
-    expect(table?.querySelector("th")?.textContent).toBe("作業日");
-    expect(table?.textContent).toContain("08/10");
-    expect(table?.textContent).toContain("10:15");
-    expect(table?.querySelectorAll("th")).toHaveLength(8);
-    expect(table?.textContent).not.toContain("実作業時間");
-    expect(table?.querySelector("th:last-child")?.textContent).toBe(
-      "自己否定割合（0～10）",
-    );
-
-    const printTable = container.querySelector<HTMLTableElement>(
-      ".print-report__table",
-    );
-    expect(printTable?.querySelectorAll("th")).toHaveLength(8);
-    expect(printTable?.textContent).not.toContain("実作業時間");
-    expect(container.querySelector(".export-copy-fallback")).toBeNull();
+    expect(mocks.downloadPdfBlob).toHaveBeenCalledOnce();
   });
 
-  it("コピー成功を表示する", async () => {
+  it("プレビューONでは完成PDFを埋め込み、保存操作まで自動ダウンロードしない", async () => {
+    act(() =>
+      container.querySelector<HTMLInputElement>("#report-llm-summary")?.click(),
+    );
+    act(() =>
+      container.querySelector<HTMLInputElement>("#report-pdf-preview")?.click(),
+    );
+    await click(container, "PDF生成へ");
+    await click(container, "この内容で生成");
+
+    expect(container.querySelector<HTMLIFrameElement>("iframe")?.src)
+      .toContain("blob:report-preview");
+    expect(mocks.downloadPdfBlob).not.toHaveBeenCalled();
+
+    await click(container, "PDFを保存");
+    expect(mocks.downloadPdfBlob).toHaveBeenCalledOnce();
+  });
+
+  it("生成後も既存Markdownをコピーできる", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: { writeText },
     });
-    getSessionsForExportMock.mockResolvedValueOnce([RECORD]);
-
-    await act(async () => {
-      buttonByText(container, "プレビューを生成").click();
-      await Promise.resolve();
-    });
-    await act(async () => {
-      buttonByText(container, "Markdownをコピー").click();
-      await Promise.resolve();
-    });
+    await generateWithoutLlm(container);
+    await click(container, "Markdownをコピー");
 
     expect(writeText).toHaveBeenCalledOnce();
     expect(writeText.mock.calls[0]?.[0]).toContain("| 作業日 | 入室時刻 |");
     expect(container.textContent).toContain("Markdownをコピーしました");
-  });
-
-  it("コピー失敗時はプレビューを選択して手動コピーを案内する", async () => {
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: {
-        writeText: vi.fn().mockRejectedValue(new Error("permission denied")),
-      },
-    });
-    getSessionsForExportMock.mockResolvedValueOnce([RECORD]);
-
-    await act(async () => {
-      buttonByText(container, "プレビューを生成").click();
-      await Promise.resolve();
-    });
-    const select = vi.spyOn(HTMLTextAreaElement.prototype, "select");
-
-    await act(async () => {
-      buttonByText(container, "Markdownをコピー").click();
-      await Promise.resolve();
-    });
-
-    expect(select).toHaveBeenCalledOnce();
-    expect(container.querySelector(".export-copy-fallback textarea")).not.toBeNull();
-    expect(container.textContent).toContain(
-      "表示されたMarkdownを手動でコピーしてください",
-    );
   });
 });

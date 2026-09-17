@@ -53,6 +53,7 @@ users/{uid}/sessions/{sessionId}/revisions/{revisionId}
 - `react-router-dom`
 - `firebase`（モジュラーAPI）
 - `lucide-react`
+- `pdfmake`（日本語フォント埋め込みPDF生成）
 
 開発時:
 
@@ -61,7 +62,7 @@ users/{uid}/sessions/{sessionId}/revisions/{revisionId}
 - `vitest` / `jsdom`
 - `@firebase/rules-unit-testing`
 
-Firebase CLIはプロジェクト依存へ固定していません。2026年7月時点の現行CLIはNode.js 20以上を必要とするため、デプロイとEmulator Suiteの実行環境にはNode.js 22 LTSを推奨します。アプリのビルド自体はNode.js 18以上で動作します。
+Firebase CLIはプロジェクト依存へ固定していません。デプロイとEmulator Suiteを含め、Node.js 22 LTSを推奨します（最低Node.js 20）。
 
 ### 初回インストール
 
@@ -107,6 +108,8 @@ VITE_FIREBASE_STORAGE_BUCKET=...
 VITE_FIREBASE_MESSAGING_SENDER_ID=...
 VITE_FIREBASE_APP_ID=...
 VITE_USE_FIREBASE_EMULATORS=false
+VITE_REPORT_SUMMARIZER_ENDPOINT=
+VITE_REPORT_SUMMARIZER_MODEL=
 ```
 
 `.env.local`はGit管理対象外です。FirebaseのWeb構成値そのものはクライアントへ配信される識別情報ですが、認可は必ずAuthenticationとSecurity Rulesで行います。
@@ -377,6 +380,39 @@ firebase deploy --only hosting --project <project-id>
 5. `/sessions/...`を直接開いても404にならずアプリが表示される
 6. `robots.txt`が`Disallow: /`を返す
 
+## 13. レポートPDFとLLM要約
+
+`/export`では対象日と任意の日数を指定し、同じ日数の直前期間と比較した
+「図書館作業レポート」を直接PDF生成できます。A4横（既定）/縦、LLM要約、
+図書館比較、完成PDFプレビューを切り替えられます。数値集計はすべてクライアントの
+決定的な処理で行い、LLMには計算させません。
+
+日本語表示のため、SIL Open Font License 1.1のNoto Sans JPを
+`public/fonts`に同梱しています。ライセンス本文も同ディレクトリにあります。
+
+LLM要約は任意です。`VITE_REPORT_SUMMARIZER_ENDPOINT`を設定すると、アプリは
+Firebase IDトークンをBearerトークンとして付け、プロバイダ非依存のJSONを
+`POST`します。入力には対象・比較期間の日別データ、決定的に算出した集計・差分、
+任意の図書館集計、将来データ用の`additionalContext`を含みます。
+`VITE_REPORT_SUMMARIZER_MODEL`はサーバーへ渡す内部モデル識別子で、UIには表示しません。
+
+レスポンスは次の構造、またはこの構造を`summary`へ入れたJSONとします。
+
+```json
+{
+  "daily": [
+    { "date": "2026-09-07", "workSummary": "...", "noteSummary": "..." }
+  ],
+  "workSummary": "...",
+  "noteSummary": "...",
+  "overview": "..."
+}
+```
+
+未設定・タイムアウト・不正レスポンス時は画面で通知し、要約なし（原文連結）で
+PDF生成を続けます。APIキーを`VITE_`環境変数へ置くとブラウザへ公開されるため、
+プロバイダの秘密鍵は必ず認証・認可を行うサーバー側エンドポイントで管理してください。
+
 ## 開発コマンド
 
 ```bash
@@ -394,7 +430,7 @@ npm run check:deploy # Firebase環境変数のデプロイ前確認
 
 次は今回のPhase 1・2には含めていません。
 
-- CSV・Markdown書き出し
+- CSV書き出し
 - 更新履歴の一覧・過去バージョン詳細画面
 - アカウント削除、ユーザー自身による全データ削除
 - クライアント側暗号化、IndexedDB鍵管理、QR鍵移行、復旧キーファイル
