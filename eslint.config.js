@@ -4,7 +4,7 @@ import tseslint from "typescript-eslint";
 export default tseslint.config(
   { ignores: ["dist/**", "node_modules/**"] },
   {
-    files: ["src/**/*.{ts,tsx}", "tests/**/*.ts", "*.config.ts"],
+    files: ["src/**/*.{ts,tsx}", "tests/**/*.ts", "*.config.ts", "functions/src/**/*.ts", "functions/tests/**/*.ts", "functions/*.config.ts"],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     rules: {
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],

@@ -84,6 +84,7 @@ describe("ExportPage", () => {
   let originalCreateObjectUrl: typeof URL.createObjectURL | undefined;
 
   beforeEach(() => {
+    vi.stubEnv("VITE_REPORT_SUMMARIZER_ENDPOINT", "");
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-07T13:36:00.000Z"));
     Object.values(mocks).forEach((mock) => mock.mockReset());
@@ -116,6 +117,8 @@ describe("ExportPage", () => {
     if (originalCreateObjectUrl) URL.createObjectURL = originalCreateObjectUrl;
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it("診察向けの既定値を設定し、生成前に対象と比較期間を確認する", async () => {
@@ -186,6 +189,35 @@ describe("ExportPage", () => {
       summary: null,
     });
     expect(mocks.downloadPdfBlob).toHaveBeenCalledOnce();
+  });
+
+  it("認証付きHTTP要約の結果を既存PDFへ渡す", async () => {
+    vi.stubEnv("VITE_REPORT_SUMMARIZER_ENDPOINT", "/api/report-summary");
+    const summary = {
+      daily: [{ date: "2026-09-06", workSummary: "実装を進めた。", noteSummary: "安定していた。" }],
+      workSummary: "レポート実装", noteSummary: "状態の記録", overview: "期間の振り返り",
+    };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(summary)));
+    vi.stubGlobal("fetch", fetchMock);
+    await click(container, "PDF生成へ");
+    await click(container, "この内容で生成");
+    expect(mocks.getIdToken).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith("/api/report-summary", expect.objectContaining({
+      headers: { "Content-Type": "application/json", Authorization: "Bearer token" },
+    }));
+    expect(mocks.createReportPdfBlob.mock.calls[0]?.[1]).toMatchObject({ summary });
+    expect(mocks.downloadPdfBlob).toHaveBeenCalledOnce();
+  });
+
+  it("要約API失敗後も要約なしでPDF生成を続行できる", async () => {
+    vi.stubEnv("VITE_REPORT_SUMMARIZER_ENDPOINT", "/api/report-summary");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 502 })));
+    await click(container, "PDF生成へ");
+    await click(container, "この内容で生成");
+    expect(container.textContent).toContain("LLM要約の生成に失敗しました");
+    expect(mocks.createReportPdfBlob).not.toHaveBeenCalled();
+    await click(container, "要約なしで続ける");
+    expect(mocks.createReportPdfBlob.mock.calls[0]?.[1]).toMatchObject({ summary: null });
   });
 
   it("プレビューONでは完成PDFを埋め込み、保存操作まで自動ダウンロードしない", async () => {

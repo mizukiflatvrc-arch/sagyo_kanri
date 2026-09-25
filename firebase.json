@@ -8,6 +8,13 @@
     ],
     "rewrites": [
       {
+        "source": "/api/report-summary",
+        "function": {
+          "functionId": "reportSummary",
+          "region": "asia-northeast1"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
@@ -73,6 +80,31 @@
     "ui": {
       "enabled": false
     },
-    "singleProjectMode": true
+    "singleProjectMode": true,
+    "functions": {
+      "host": "127.0.0.1",
+      "port": 5001
+    },
+    "hosting": {
+      "host": "127.0.0.1",
+      "port": 5000
+    }
+  },
+  "functions": {
+    "source": "functions",
+    "codebase": "default",
+    "runtime": "nodejs22",
+    "ignore": [
+      "node_modules",
+      ".git",
+      "*.log",
+      ".env.*",
+      "tests",
+      "tsconfig*.json",
+      "vitest.config.ts"
+    ],
+    "predeploy": [
+      "npm --prefix \"$RESOURCE_DIR\" run build"
+    ]
   }
 }

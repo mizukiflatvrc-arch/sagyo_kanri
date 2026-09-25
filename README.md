@@ -68,6 +68,7 @@ Firebase CLIはプロジェクト依存へ固定していません。デプロ�
 
 ```bash
 npm install
+npm --prefix functions install
 ```
 
 確認:
@@ -108,8 +109,7 @@ VITE_FIREBASE_STORAGE_BUCKET=...
 VITE_FIREBASE_MESSAGING_SENDER_ID=...
 VITE_FIREBASE_APP_ID=...
 VITE_USE_FIREBASE_EMULATORS=false
-VITE_REPORT_SUMMARIZER_ENDPOINT=
-VITE_REPORT_SUMMARIZER_MODEL=
+VITE_REPORT_SUMMARIZER_ENDPOINT=/api/report-summary
 ```
 
 `.env.local`はGit管理対象外です。FirebaseのWeb構成値そのものはクライアントへ配信される識別情報ですが、認可は必ずAuthenticationとSecurity Rulesで行います。
@@ -313,7 +313,7 @@ Firestore処理は画面から分離しています。
 
 ### ルールテストの準備
 
-Firebase CLIとJava 11以上が必要です。Node.js 22 LTS環境で次を実行します。
+Firebase CLIとJava 21以上を用意してください。Node.js 22 LTS環境で次を実行します。
 
 ```bash
 npm install --global firebase-tools
@@ -394,9 +394,11 @@ LLM要約は任意です。`VITE_REPORT_SUMMARIZER_ENDPOINT`を設定すると�
 Firebase IDトークンをBearerトークンとして付け、プロバイダ非依存のJSONを
 `POST`します。入力には対象・比較期間の日別データ、決定的に算出した集計・差分、
 任意の図書館集計、将来データ用の`additionalContext`を含みます。
-`VITE_REPORT_SUMMARIZER_MODEL`はサーバーへ渡す内部モデル識別子で、UIには表示しません。
+モデル・location・system instructionはFunctions側が管理します。
+ブラウザは`{ "input": ReportSummaryInput }`だけを送信します。
 
-レスポンスは次の構造、またはこの構造を`summary`へ入れたJSONとします。
+Phase 1のAPIレスポンスはwrapperなしの次の構造です（既存のフロントエンドparserは
+`summary` wrapperも引き続き読み取れます）。
 
 ```json
 {
@@ -411,7 +413,151 @@ Firebase IDトークンをBearerトークンとして付け、プロバイダ非
 
 未設定・タイムアウト・不正レスポンス時は画面で通知し、要約なし（原文連結）で
 PDF生成を続けます。APIキーを`VITE_`環境変数へ置くとブラウザへ公開されるため、
-プロバイダの秘密鍵は必ず認証・認可を行うサーバー側エンドポイントで管理してください。
+Phase 1ではAPIキーを使用せず、Functions実行サービスアカウントのADCでVertex AIを呼び出します。
+
+### 13-1. Phase 1の構成とAPI契約
+
+`ExportPage → HttpReportSummarizer → POST /api/report-summary → Hosting rewrite →
+reportSummary (Functions v2 / Node.js 22) → Firebase ID token検証 → Vertex AI Gemini →
+検証済みReportSummary → 既存PDF`の経路です。Functionは`asia-northeast1`です。
+既存リポジトリにはリソースのリージョン指定がないため東京を採用しています。
+Hosting rewriteはSPA用の`** → /index.html`より先に評価されます。
+
+- `Authorization: Bearer <user.getIdToken()の結果>`が必須。HTTP基盤は`invoker: public`で受付け、Firebase Admin SDKの`verifyIdToken()`でアプリ利用者を検証します。Cloud Run用のID tokenとは異なります。
+- bodyは`{ "input": ReportSummaryInput }`だけです。未知のキー（model、instructions、project、uid等）はネストしたデータも含め拒否します。
+- `additionalContext`はPhase 1では空objectのみです。将来の追加時に目的別の型とvalidatorを拡張します。
+- Geminiへ送るのは検証済みの対象・比較期間、入力済み数値・差分、日別の作業・メモ・図書館名、任意の図書館集計のみです。認証UID、メールアドレス、tokenを追加しません。自由記述自体は要約対象として送信します。
+- `application/json`と`responseJsonSchema`を指定します。上記の全フィールドが必須、追加プロパティは禁止です。返却文字列はJSON parse後に再検証し、dailyは作業日（`stayMinutes !== null`）と完全一致させます。日付の重複・欠落・期間外・非作業日は拒否します。
+- エラーは`{ "error": "固定メッセージ" }`。400=不正入力、401=認証なし/失敗、405=POST以外（`Allow: POST`）、500=サーバー設定不足、502=Vertex AI失敗/不正出力。入力・token・モデル出力・providerエラー全文はログやエラーレスポンスへ出しません。
+- 失敗時は既存ダイアログから要約なしでPDF生成を続行できます。集計は従来どおり決定的なアプリ処理です。
+
+実装は`functions/src/index.ts`（v2登録・設定・Admin認証）、`reportSummary.ts`
+（HTTP契約・入出力検証）、`gemini.ts`（Vertex専用adapter）の3ファイルです。
+既存`src/report/types.ts`をtype-onlyで参照し、型を重複定義しません。
+このためコンパイル出力のentryは`functions/lib/functions/src/index.js`です。
+deployにはpredeployで生成したJSを同梱し、`gcp-build`は空にしてCloud Buildでの再コンパイルを省きます。
+ルートとFunctionsの両方で依存をインストールしてからビルドしてください。
+
+### 13-2. 手動で行うGoogle Cloud / Firebase設定
+
+FirebaseプロジェクトをBlazeプランにし、同じGoogle CloudプロジェクトでVertex AI APIを
+有効化します。以下は管理者が手動で実行するコマンドです。実装作業では実行しません。
+
+```bash
+PROJECT_ID="your-firebase-project-id"
+gcloud services enable aiplatform.googleapis.com --project "$PROJECT_ID"
+PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+FUNCTION_SERVICE_ACCOUNT="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${FUNCTION_SERVICE_ACCOUNT}" \
+  --role="roles/aiplatform.user"
+```
+
+2nd genの既定実行アカウントはCompute Engineの既定サービスアカウントです。
+別の実行アカウントへ変更している環境では、Consoleで実際のアカウントを確認して
+`FUNCTION_SERVICE_ACCOUNT`を置き換えてください。Vertex AI User (`roles/aiplatform.user`)
+を実行アカウントへ付与します。さらに絞る場合、生成に必要な権限は
+`aiplatform.endpoints.predict`です。Owner/Editorの付与は不要です。
+[実行アカウントの仕様](https://firebase.google.com/docs/functions/version-comparison)、
+[Vertex AIの権限](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/access-control)を参照してください。
+
+モデルとVertexのlocationはFirebaseの`defineString()`によるparameterized configurationです。
+既定値は`functions/src/index.ts`の1箇所で定義しています。
+2026-09-24時点の既定はGA版`gemini-3.5-flash`、`VERTEX_LOCATION=global`です。
+このモデルの東京リージョンはSingle Zone Provisioned Throughput向けのため、
+Phase 1は従量課金に対応するglobalを利用します。Functionの東京配置はVertexの
+処理場所を東京へ限定するものではありません。
+[モデル・対応ロケーション](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-5-flash)を確認してください。
+
+上書きする場合は`functions/.env.<project-id>`（Git管理対象外）に設定します。
+
+```dotenv
+GEMINI_MODEL=gemini-3.5-flash
+VERTEX_LOCATION=global
+```
+
+Firebase CLIはdeploy時にparameterを解決します。変更後はFunctionsを再deployしてください。
+[parameterized configuration](https://firebase.google.com/docs/functions/config-env)を参照してください。
+project IDは`GCLOUD_PROJECT`、`GOOGLE_CLOUD_PROJECT`、Admin SDKのruntime project設定から
+取得します。クライアントからは受け取りません。APIキーやサービスアカウントJSONは不要で、
+リポジトリや`VITE_*`へ置きません。
+
+### 13-3. ローカル確認
+
+単体テストは認証とGeminiをmockし、実Vertex AIへ通信しません。
+
+```bash
+npm --prefix functions test
+npm --prefix functions run typecheck
+npm --prefix functions run lint
+npm --prefix functions run build
+```
+
+実Vertex AIで試す場合は、Vertex AIを利用できる開発者アカウントでADCを用意します。
+`firebase login`だけではVertex AI用のADCは作られません。
+
+```bash
+gcloud auth application-default login
+gcloud auth application-default set-quota-project <project-id>
+```
+
+必要なローカル権限はVertex AI Userと、quota project上の
+Service Usage Consumer (`roles/serviceusage.serviceUsageConsumer`)です。
+[ローカルADC](https://docs.cloud.google.com/docs/authentication/set-up-adc-local-dev-environment)を参照してください。
+
+`.env.local`の`VITE_FIREBASE_PROJECT_ID`を上記と同じ実プロジェクトにし、
+`VITE_USE_FIREBASE_EMULATORS=true`、`VITE_REPORT_SUMMARIZER_ENDPOINT=/api/report-summary`を設定します。
+必要なら`functions/.env.local`でモデル・locationを上書きできます。
+
+```bash
+npm --prefix functions run build
+npm run build
+firebase emulators:start --only auth,firestore,functions,hosting --project <project-id>
+```
+
+`http://127.0.0.1:5000`でログインし、記録を作成して`/export`のLLM要約を有効にします。
+Hosting (5000)がFunction (5001)へrewriteし、Auth (9099)のtokenをAdmin SDKが検証します。
+Firestore (8080)への記録保存はローカルです。Vertex AIはエミュレーションされず、
+要約実行時に実サービスへデータが送信され課金されます。
+Viteの5173にはこのrewriteがないため、この確認にはHosting emulatorを利用します。
+[Functions emulatorの接続](https://firebase.google.com/docs/emulator-suite/connect_functions)を参照してください。
+
+疎通だけならADCなし・`--project demo-hibi`でもFunctions/Hostingを起動し、
+次の要求がそれぞれ405、401になることを確認できます（Geminiは呼ばれません）。
+
+```bash
+curl -i http://127.0.0.1:5000/api/report-summary
+curl -i -X POST -H 'Content-Type: application/json' \
+  -d '{"input":{}}' http://127.0.0.1:5000/api/report-summary
+```
+
+既存Rulesテストは引き続き`npm run test:rules`で、デモプロジェクトのFirestoreだけを使用します。
+
+### 13-4. デプロイ
+
+本番用`.env.local`は`VITE_USE_FIREBASE_EMULATORS=false`へ戻し、endpointを
+`/api/report-summary`として再ビルドします。Console側のAPI・実行アカウント権限を
+設定した後、ユーザーが次を実行してください。
+
+```bash
+npm run check:deploy
+npm test
+npm run typecheck
+npm run lint
+npm run build
+npm --prefix functions test
+npm --prefix functions run typecheck
+npm --prefix functions run lint
+npm --prefix functions run build
+npm run test:rules
+firebase deploy --only functions:reportSummary,hosting --project <project-id>
+```
+
+Functionsはpredeployでもビルドされます。HTTP基盤のpublic invocationを禁止する
+組織ポリシーがある場合は管理者の調整が必要です。アプリ側のFirebase認証は常に必須です。
+この変更にFirestore schema/Rulesの変更はありません。
+Phase 2以降の他プロバイダ・ローカルLLM対応は未実装です。モデル選択UI、要約保存、
+ストリーミング、cache、queue、RAG等も追加していません。
 
 ## 開発コマンド
 

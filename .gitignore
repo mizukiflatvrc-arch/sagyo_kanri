@@ -13,4 +13,7 @@ ui-debug.log
 .DS_Store
 *.log
 coverage/
+functions/lib/
+functions/.env.*
+!functions/.env.example
 *.tsbuildinfo
