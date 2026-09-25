@@ -31,6 +31,7 @@ describe("Gemini Vertex AI adapter", () => {
         systemInstruction: expect.stringContaining("復学・就労の可否を判断しない"),
         responseMimeType: "application/json",
         responseJsonSchema: REPORT_SUMMARY_SCHEMA,
+        maxOutputTokens: 2048,
       },
     });
     expect(REPORT_SUMMARY_SCHEMA.required).toEqual(["daily", "workSummary", "noteSummary", "overview"]);

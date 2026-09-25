@@ -9,12 +9,21 @@ import type {
 } from "../../src/report/types";
 
 type Check = (value: unknown) => boolean;
+const MAX_REPORT_DAYS = 30;
+const MAX_TEXT_LENGTH = 4000;
+const MAX_LIBRARY_NAME_LENGTH = 200;
+const MAX_LIBRARY_ID_LENGTH = 200;
+const MAX_LIBRARIES = 100;
+const MAX_DAY_LIBRARIES = 20;
 const object = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const string: Check = (value) => typeof value === "string";
+const boundedString = (maxLength: number): Check =>
+  (value) => typeof value === "string" && value.length <= maxLength;
 const number: Check = (value) => typeof value === "number" && Number.isFinite(value);
 const nullableNumber: Check = (value) => value === null || number(value);
-const array = (check: Check): Check => (value) => Array.isArray(value) && value.every(check);
+const array = (check: Check, maxLength: number): Check =>
+  (value) => Array.isArray(value) && value.length <= maxLength && value.every(check);
 
 // Exact keys prevent undeclared client instructions or identity fields from
 // being passed through to the model, including inside nested records.
@@ -46,22 +55,23 @@ const periodShape = shape({
   period: shape({
     startDate: date,
     endDate: date,
-    days: (value) => number(value) && Number.isInteger(value) && (value as number) > 0,
+    days: (value) => number(value) && Number.isInteger(value) && (value as number) > 0 && (value as number) <= MAX_REPORT_DAYS,
   }),
   metrics: shape(metrics),
   days: array(shape({
     date,
-    libraries: array(string),
+    libraries: array(boundedString(MAX_LIBRARY_NAME_LENGTH), MAX_DAY_LIBRARIES),
     stayMinutes: nullableNumber,
     ...scores,
-    workText: string,
-    noteText: string,
-  })),
+    workText: boundedString(MAX_TEXT_LENGTH),
+    noteText: boundedString(MAX_TEXT_LENGTH),
+  }), MAX_REPORT_DAYS),
 });
 const period: Check = (value) => {
   if (!periodShape(value)) return false;
   const { period: range, days } = value as ReportSummaryPeriodInput;
   return range.startDate <= range.endDate &&
+    range.days === days.length &&
     new Set(days.map((day) => day.date)).size === days.length &&
     days.every((day) => day.date >= range.startDate && day.date <= range.endDate);
 };
@@ -80,7 +90,11 @@ const inputShape = shape({
     fatigueScore: metricComparison,
     selfCriticismScore: metricComparison,
   } satisfies Record<keyof ReportComparisons, Check>),
-  libraries: array(shape({ libraryId: string, libraryName: string, ...metrics })),
+  libraries: array(shape({
+    libraryId: boundedString(MAX_LIBRARY_ID_LENGTH),
+    libraryName: boundedString(MAX_LIBRARY_NAME_LENGTH),
+    ...metrics,
+  }), MAX_LIBRARIES),
   // Phase 1 has no additional data sources. Add explicit validated fields when
   // a future integration is introduced; do not forward arbitrary JSON.
   additionalContext: shape({}),
@@ -92,7 +106,7 @@ export function parseReportSummaryRequest(body: unknown): ReportSummaryInput {
 }
 
 const summaryShape = shape({
-  daily: array(shape({ date, workSummary: string, noteSummary: string })),
+  daily: array(shape({ date, workSummary: string, noteSummary: string }), MAX_REPORT_DAYS),
   workSummary: string,
   noteSummary: string,
   overview: string,

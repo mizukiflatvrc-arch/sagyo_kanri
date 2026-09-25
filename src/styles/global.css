@@ -1866,6 +1866,12 @@ h3 {
   font-weight: 700;
 }
 
+.report-option-with-hint {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
 .report-option-row {
   display: grid;
   min-height: 38px;

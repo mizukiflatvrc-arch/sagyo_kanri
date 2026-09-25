@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createReportSummaryInput, parseReportSummary } from "../../src/report/summarizer";
+import type { ReportSummaryInput } from "../../src/report/types";
 import { calculateReportPeriods, createReportData } from "../../src/utils/report";
 import { createReportSummaryHandler, parseReportSummaryRequest, ServerConfigurationError } from "../src/reportSummary";
 
@@ -10,6 +11,21 @@ function inputFixture() {
     concentrationScore: 7, anxietyScore: 3, fatigueScore: 5, selfCriticismScore: 2,
     actualTaskText: "実装", note: "メモ",
   }], calculateReportPeriods("2026-09-07", 7)!, new Map([["central", "中央図書館"]])), true);
+}
+
+function periodFixture(days: number) {
+  return createReportSummaryInput(
+    createReportData([], calculateReportPeriods("2026-09-07", days)!, new Map()),
+    false,
+  );
+}
+
+function withDayChange(
+  key: "target" | "comparison",
+  change: (day: ReportSummaryInput["target"]["days"][number]) => ReportSummaryInput["target"]["days"][number],
+): ReportSummaryInput {
+  const input = inputFixture();
+  return { ...input, [key]: { ...input[key], days: input[key].days.map((day, index) => index === 0 ? change(day) : day) } };
 }
 const summary = {
   daily: [{ date: "2026-09-06", workSummary: "実装を進めた。", noteSummary: "メモを残した。" }],
@@ -110,6 +126,65 @@ describe("reportSummary HTTP handler", () => {
     const input = createReportSummaryInput(createReportData([], calculateReportPeriods("2026-09-07", 7)!, new Map()), false);
     generate.mockResolvedValue(JSON.stringify({ ...summary, daily: [] }));
     expect((await call({ input })).status).toHaveBeenCalledWith(200);
+  });
+
+  async function expectBadRequest(input: ReportSummaryInput) {
+    generate.mockClear();
+    const response = await call({ input });
+    expect(response.status).toHaveBeenCalledWith(400);
+    expect(generate).not.toHaveBeenCalled();
+  }
+
+  it("accepts 30-day target and comparison periods", async () => {
+    generate.mockResolvedValue(JSON.stringify({ ...summary, daily: [] }));
+    expect((await call({ input: periodFixture(30) })).status).toHaveBeenCalledWith(200);
+  });
+
+  it.each(["target", "comparison"] as const)("rejects %s period longer than 30 days", async (key) => {
+    const input = inputFixture();
+    await expectBadRequest({ ...input, [key]: periodFixture(31)[key] });
+  });
+
+  it.each(["target", "comparison"] as const)("rejects %s.days longer than 30 entries", async (key) => {
+    const input = inputFixture();
+    const extended = periodFixture(31)[key];
+    await expectBadRequest({
+      ...input,
+      [key]: { ...extended, period: { ...extended.period, days: 30 } },
+    });
+  });
+
+  it.each(["target", "comparison"] as const)("requires %s period day count to match its array", async (key) => {
+    const input = inputFixture();
+    await expectBadRequest({ ...input, [key]: { ...input[key], period: { ...input[key].period, days: 6 } } });
+  });
+
+  it.each(["target", "comparison"] as const)("bounds %s workText and noteText at 4000 characters", async (key) => {
+    for (const field of ["workText", "noteText"] as const) {
+      expect((await call({ input: withDayChange(key, (day) => ({ ...day, [field]: "a".repeat(4000) })) })).status)
+        .toHaveBeenCalledWith(200);
+      await expectBadRequest(withDayChange(key, (day) => ({ ...day, [field]: "a".repeat(4001) })));
+      expect((await call({ input: withDayChange(key, (day) => ({ ...day, [field]: "" })) })).status)
+        .toHaveBeenCalledWith(200);
+    }
+  });
+
+  it.each(["target", "comparison"] as const)("bounds %s day library names and count", async (key) => {
+    expect((await call({ input: withDayChange(key, (day) => ({ ...day, libraries: ["a".repeat(200)] })) })).status)
+      .toHaveBeenCalledWith(200);
+    await expectBadRequest(withDayChange(key, (day) => ({ ...day, libraries: ["a".repeat(201)] })));
+    await expectBadRequest(withDayChange(key, (day) => ({ ...day, libraries: Array(21).fill("図書館") })));
+  });
+
+  it("bounds library names, IDs and total count", async () => {
+    const input = inputFixture();
+    const library = input.libraries[0]!;
+    for (const field of ["libraryName", "libraryId"] as const) {
+      expect((await call({ input: { ...input, libraries: [{ ...library, [field]: "a".repeat(200) }] } })).status)
+        .toHaveBeenCalledWith(200);
+      await expectBadRequest({ ...input, libraries: [{ ...library, [field]: "a".repeat(201) }] });
+    }
+    await expectBadRequest({ ...input, libraries: Array(101).fill(library) });
   });
 });
 

@@ -390,12 +390,16 @@ firebase deploy --only hosting --project <project-id>
 日本語表示のため、SIL Open Font License 1.1のNoto Sans JPを
 `public/fonts`に同梱しています。ライセンス本文も同ディレクトリにあります。
 
-LLM要約は任意です。`VITE_REPORT_SUMMARIZER_ENDPOINT`を設定すると、アプリは
+LLM要約は任意で、初期値はOFFです。ユーザーがONにした場合だけ、
 Firebase IDトークンをBearerトークンとして付け、プロバイダ非依存のJSONを
-`POST`します。入力には対象・比較期間の日別データ、決定的に算出した集計・差分、
+`VITE_REPORT_SUMMARIZER_ENDPOINT`へ`POST`します。対象・比較期間の作業内容、メモ、
+状態スコア、図書館名、決定的に算出した集計・差分、
 任意の図書館集計、将来データ用の`additionalContext`を含みます。
 モデル・location・system instructionはFunctions側が管理します。
 ブラウザは`{ "input": ReportSummaryInput }`だけを送信します。
+LLM要約の対象は各期間最大30日です。サーバーは日別の作業内容・メモを各4000文字、
+図書館名・IDを各200文字までに制限し、Geminiの出力を`maxOutputTokens=2048`に制限します。
+上限を超える入力は要約APIが拒否し、画面では要約なしのPDF生成を選べます。
 
 Phase 1のAPIレスポンスはwrapperなしの次の構造です（既存のフロントエンドparserは
 `summary` wrapperも引き続き読み取れます）。
@@ -536,7 +540,8 @@ curl -i -X POST -H 'Content-Type: application/json' \
 ### 13-4. デプロイ
 
 本番用`.env.local`は`VITE_USE_FIREBASE_EMULATORS=false`へ戻し、endpointを
-`/api/report-summary`として再ビルドします。Console側のAPI・実行アカウント権限を
+`/api/report-summary`として再ビルドします。`VITE_REPORT_SUMMARIZER_ENDPOINT`は
+本番deploy前の`npm run check:deploy`で必須です。Console側のAPI・実行アカウント権限を
 設定した後、ユーザーが次を実行してください。
 
 ```bash
@@ -569,7 +574,7 @@ npm run typecheck  # strict型検査
 npm run build      # strict型検査 + 本番ビルド
 npm run preview    # distのローカル確認
 npm run test:rules # Firestore Emulatorでルールテスト
-npm run check:deploy # Firebase環境変数のデプロイ前確認
+npm run check:deploy # FirebaseとLLM endpointの環境変数のデプロイ前確認
 ```
 
 ## MVP外

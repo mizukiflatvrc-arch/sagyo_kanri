@@ -62,6 +62,7 @@ export async function generateGeminiSummary(input: ReportSummaryInput, config: G
       systemInstruction: SUMMARY_INSTRUCTIONS,
       responseMimeType: "application/json",
       responseJsonSchema: REPORT_SUMMARY_SCHEMA,
+      maxOutputTokens: 2048,
     },
   });
   return response.text;

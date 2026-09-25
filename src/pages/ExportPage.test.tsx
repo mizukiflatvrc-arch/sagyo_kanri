@@ -70,11 +70,14 @@ async function click(container: HTMLElement, text: string) {
 }
 
 async function generateWithoutLlm(container: HTMLElement) {
+  await click(container, "PDF生成へ");
+  await click(container, "この内容で生成");
+}
+
+function enableLlm(container: HTMLElement) {
   const llm = container.querySelector<HTMLInputElement>("#report-llm-summary");
   if (!llm) throw new Error("LLM switch not found");
   act(() => llm.click());
-  await click(container, "PDF生成へ");
-  await click(container, "この内容で生成");
 }
 
 describe("ExportPage", () => {
@@ -129,7 +132,8 @@ describe("ExportPage", () => {
     expect(container.querySelector<HTMLSelectElement>("#report-orientation")?.value)
       .toBe("landscape");
     expect(container.querySelector<HTMLInputElement>("#report-llm-summary")?.checked)
-      .toBe(true);
+      .toBe(false);
+    expect(container.textContent).toContain("作業内容、メモ、状態データがGoogle Cloud Vertex AIへ送信されます");
     expect(container.querySelector<HTMLInputElement>("#report-library-comparison")?.checked)
       .toBe(false);
     expect(container.querySelector<HTMLInputElement>("#report-pdf-preview")?.checked)
@@ -146,6 +150,9 @@ describe("ExportPage", () => {
   });
 
   it("LLM OFFでは一度も要約を呼ばず、直接PDFを生成してMarkdownも維持する", async () => {
+    vi.stubEnv("VITE_REPORT_SUMMARIZER_ENDPOINT", "/api/report-summary");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
     await generateWithoutLlm(container);
 
     expect(mocks.getSessionsForReport).toHaveBeenCalledOnce();
@@ -153,6 +160,7 @@ describe("ExportPage", () => {
     expect(start.toISOString()).toBe("2026-08-24T15:00:00.000Z");
     expect(endExclusive.toISOString()).toBe("2026-09-07T15:00:00.000Z");
     expect(mocks.getIdToken).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(mocks.createReportPdfBlob).toHaveBeenCalledOnce();
     expect(mocks.createReportPdfBlob.mock.calls[0]?.[1]).toMatchObject({
       orientation: "landscape",
@@ -176,6 +184,7 @@ describe("ExportPage", () => {
   });
 
   it("LLM未設定時はダイアログ通知後、要約なしで生成を続ける", async () => {
+    enableLlm(container);
     await click(container, "PDF生成へ");
     await click(container, "この内容で生成");
 
@@ -199,6 +208,7 @@ describe("ExportPage", () => {
     };
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(summary)));
     vi.stubGlobal("fetch", fetchMock);
+    enableLlm(container);
     await click(container, "PDF生成へ");
     await click(container, "この内容で生成");
     expect(mocks.getIdToken).toHaveBeenCalledOnce();
@@ -212,6 +222,7 @@ describe("ExportPage", () => {
   it("要約API失敗後も要約なしでPDF生成を続行できる", async () => {
     vi.stubEnv("VITE_REPORT_SUMMARIZER_ENDPOINT", "/api/report-summary");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 502 })));
+    enableLlm(container);
     await click(container, "PDF生成へ");
     await click(container, "この内容で生成");
     expect(container.textContent).toContain("LLM要約の生成に失敗しました");
@@ -221,9 +232,6 @@ describe("ExportPage", () => {
   });
 
   it("プレビューONでは完成PDFを埋め込み、保存操作まで自動ダウンロードしない", async () => {
-    act(() =>
-      container.querySelector<HTMLInputElement>("#report-llm-summary")?.click(),
-    );
     act(() =>
       container.querySelector<HTMLInputElement>("#report-pdf-preview")?.click(),
     );
