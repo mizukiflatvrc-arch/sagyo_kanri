@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createReportSummaryInput, parseReportSummary } from "../../src/report/summarizer";
 import type { ReportSummaryInput } from "../../src/report/types";
 import { calculateReportPeriods, createReportData } from "../../src/utils/report";
-import { createReportSummaryHandler, parseReportSummaryRequest, ServerConfigurationError } from "../src/reportSummary";
+import { createReportSummaryHandler, parseReportSummaryRequest } from "../src/reportSummary";
+import { ServerConfigurationError, type ReportSummaryProvider } from "../src/reportSummaryProvider";
+import { createReportSummaryProvider } from "../src/reportSummaryProviderFactory";
 
 function inputFixture() {
   return createReportSummaryInput(createReportData([{
@@ -34,12 +36,15 @@ const summary = {
 
 describe("reportSummary HTTP handler", () => {
   const verifyIdToken = vi.fn();
-  const generate = vi.fn();
+  const generate = vi.fn<ReportSummaryProvider["generate"]>();
+  const fakeProvider: ReportSummaryProvider = { generate };
+  const getProvider = vi.fn<() => ReportSummaryProvider>();
   const logError = vi.fn();
-  const handler = createReportSummaryHandler({ verifyIdToken, generate, logError });
+  const handler = createReportSummaryHandler({ verifyIdToken, getProvider, logError });
   beforeEach(() => {
     vi.resetAllMocks();
     verifyIdToken.mockResolvedValue({ uid: "private-uid", email: "private@example.test" });
+    getProvider.mockReturnValue(fakeProvider);
     generate.mockResolvedValue(JSON.stringify(summary));
   });
   async function call(body: unknown = { input: inputFixture() }, authorization: string | undefined = "Bearer valid-token", method = "POST") {
@@ -53,37 +58,45 @@ describe("reportSummary HTTP handler", () => {
     expect(response.status).toHaveBeenCalledWith(405);
     expect(response.set).toHaveBeenCalledWith("Allow", "POST");
     expect(verifyIdToken).not.toHaveBeenCalled();
+    expect(getProvider).not.toHaveBeenCalled();
     expect(generate).not.toHaveBeenCalled();
   });
   it.each(["", "Basic token", "Bearer", "Bearer token extra"])("missing/malformed token %s → 401", async (token) => {
     const response = await call(undefined, token);
     expect(response.status).toHaveBeenCalledWith(401);
     expect(verifyIdToken).not.toHaveBeenCalled();
+    expect(getProvider).not.toHaveBeenCalled();
     expect(generate).not.toHaveBeenCalled();
   });
   it("Authorization headerなし → 401", async () => {
     const response = { set: vi.fn().mockReturnThis(), status: vi.fn().mockReturnThis(), json: vi.fn() };
     await handler({ method: "POST", headers: {}, body: { input: inputFixture() } }, response);
     expect(response.status).toHaveBeenCalledWith(401);
+    expect(getProvider).not.toHaveBeenCalled();
     expect(generate).not.toHaveBeenCalled();
   });
   it("invalid token / verification failure → 401", async () => {
     verifyIdToken.mockRejectedValue(new Error("private auth error"));
     const response = await call();
     expect(response.status).toHaveBeenCalledWith(401);
+    expect(getProvider).not.toHaveBeenCalled();
     expect(generate).not.toHaveBeenCalled();
     expect(logError).not.toHaveBeenCalled();
   });
-  it.each([null, [], {}, { input: null }, { input: [] }, { input: inputFixture(), model: "client-model" }, { input: inputFixture(), instructions: "client-prompt" }])("invalid body → 400", async (body) => {
+  it.each([null, [], {}, { input: null }, { input: [] }, { input: inputFixture(), provider: "client-provider" }, { input: inputFixture(), model: "client-model" }, { input: inputFixture(), instructions: "client-prompt" }])("invalid body → 400", async (body) => {
     const response = await call(body);
     expect(response.status).toHaveBeenCalledWith(400);
+    expect(getProvider).not.toHaveBeenCalled();
     expect(generate).not.toHaveBeenCalled();
   });
-  it("valid request → adapter → unwrapped, frontend-compatible 200", async () => {
+  it("valid request → fake provider → unwrapped, frontend-compatible 200", async () => {
     const input = inputFixture();
     const response = await call({ input });
     expect(verifyIdToken).toHaveBeenCalledWith("valid-token");
+    expect(getProvider).toHaveBeenCalledExactlyOnceWith();
     expect(generate).toHaveBeenCalledExactlyOnceWith(input);
+    expect(verifyIdToken.mock.invocationCallOrder[0]).toBeLessThan(getProvider.mock.invocationCallOrder[0]!);
+    expect(getProvider.mock.invocationCallOrder[0]).toBeLessThan(generate.mock.invocationCallOrder[0]!);
     expect(JSON.stringify(generate.mock.calls)).not.toMatch(/private-uid|private@example/);
     expect(response.status).toHaveBeenCalledWith(200);
     expect(response.json).toHaveBeenCalledWith(summary);
@@ -106,7 +119,7 @@ describe("reportSummary HTTP handler", () => {
     expect(response.json).toHaveBeenCalledWith({ error: "Summary generation failed" });
     expect(logError).toHaveBeenCalledWith("Report summary generation or output validation failed");
   });
-  it("Vertex AI failure → 502 without leaking internal errors", async () => {
+  it("provider failure → 502 without leaking internal errors", async () => {
     generate.mockRejectedValue(new Error("sensitive upstream details"));
     const response = await call();
     expect(response.status).toHaveBeenCalledWith(502);
@@ -117,9 +130,22 @@ describe("reportSummary HTTP handler", () => {
     expect((await call()).status).toHaveBeenCalledWith(500);
     expect(logError).toHaveBeenCalledWith("Missing project ID");
   });
+  it("unknown provider from factory → 500 without leaking configuration values", async () => {
+    const vertexGemini = vi.fn(() => ({ project: "unused", location: "unused", model: "unused" }));
+    getProvider.mockImplementation(() => createReportSummaryProvider("sensitive-unknown-provider", { vertexGemini }));
+    const response = await call();
+    expect(response.status).toHaveBeenCalledWith(500);
+    expect(response.json).toHaveBeenCalledWith({ error: "Server configuration error" });
+    expect(logError).toHaveBeenCalledExactlyOnceWith("Unsupported REPORT_SUMMARIZER_PROVIDER");
+    expect(getProvider).toHaveBeenCalledExactlyOnceWith();
+    expect(generate).not.toHaveBeenCalled();
+    expect(vertexGemini).not.toHaveBeenCalled();
+    expect(JSON.stringify([response.json.mock.calls, logError.mock.calls])).not.toContain("sensitive");
+  });
   it("missing runtime project before token verification → 500", async () => {
     verifyIdToken.mockRejectedValue(new ServerConfigurationError("Missing runtime project ID"));
     expect((await call()).status).toHaveBeenCalledWith(500);
+    expect(getProvider).not.toHaveBeenCalled();
     expect(generate).not.toHaveBeenCalled();
   });
   it("no work days accepts an empty daily array", async () => {
@@ -129,9 +155,11 @@ describe("reportSummary HTTP handler", () => {
   });
 
   async function expectBadRequest(input: ReportSummaryInput) {
+    getProvider.mockClear();
     generate.mockClear();
     const response = await call({ input });
     expect(response.status).toHaveBeenCalledWith(400);
+    expect(getProvider).not.toHaveBeenCalled();
     expect(generate).not.toHaveBeenCalled();
   }
 
