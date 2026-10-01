@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import type { ReportSummaryInput } from "../../src/report/types";
-import { ServerConfigurationError } from "./reportSummary";
+import { ServerConfigurationError, type ReportSummaryProvider } from "./reportSummaryProvider";
 
 const SUMMARY_INSTRUCTIONS = [
   "このアプリは記録と振り返りの補助です。対象期間と直前の同日数期間を比較し、簡潔な日本語で要約してください。",
@@ -38,32 +38,37 @@ export const REPORT_SUMMARY_SCHEMA = {
   },
 };
 
-export interface GeminiConfiguration {
+export interface VertexGeminiConfiguration {
   project: string | undefined;
   location: string;
   model: string;
 }
 
-export async function generateGeminiSummary(input: ReportSummaryInput, config: GeminiConfiguration): Promise<string | undefined> {
-  if (!config.project?.trim() || !config.location.trim() || !config.model.trim()) {
-    throw new ServerConfigurationError("Report summary requires a runtime Google Cloud project ID, GEMINI_MODEL and VERTEX_LOCATION");
+export class VertexGeminiProvider implements ReportSummaryProvider {
+  constructor(private readonly configuration: VertexGeminiConfiguration) {}
+
+  async generate(input: ReportSummaryInput): Promise<string | undefined> {
+    const config = this.configuration;
+    if (!config.project?.trim() || !config.location.trim() || !config.model.trim()) {
+      throw new ServerConfigurationError("Report summary requires a runtime Google Cloud project ID, GEMINI_MODEL and VERTEX_LOCATION");
+    }
+    const client = new GoogleGenAI({
+      vertexai: true,
+      project: config.project.trim(),
+      location: config.location.trim(),
+      // The Functions runtime service account (or local ADC) supplies credentials.
+      httpOptions: { timeout: 25_000 },
+    });
+    const response = await client.models.generateContent({
+      model: config.model.trim(),
+      contents: JSON.stringify(input),
+      config: {
+        systemInstruction: SUMMARY_INSTRUCTIONS,
+        responseMimeType: "application/json",
+        responseJsonSchema: REPORT_SUMMARY_SCHEMA,
+        maxOutputTokens: 2048,
+      },
+    });
+    return response.text;
   }
-  const client = new GoogleGenAI({
-    vertexai: true,
-    project: config.project.trim(),
-    location: config.location.trim(),
-    // The Functions runtime service account (or local ADC) supplies credentials.
-    httpOptions: { timeout: 25_000 },
-  });
-  const response = await client.models.generateContent({
-    model: config.model.trim(),
-    contents: JSON.stringify(input),
-    config: {
-      systemInstruction: SUMMARY_INSTRUCTIONS,
-      responseMimeType: "application/json",
-      responseJsonSchema: REPORT_SUMMARY_SCHEMA,
-      maxOutputTokens: 2048,
-    },
-  });
-  return response.text;
 }

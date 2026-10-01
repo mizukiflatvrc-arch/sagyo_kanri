@@ -395,13 +395,13 @@ Firebase IDトークンをBearerトークンとして付け、プロバイダ非
 `VITE_REPORT_SUMMARIZER_ENDPOINT`へ`POST`します。対象・比較期間の作業内容、メモ、
 状態スコア、図書館名、決定的に算出した集計・差分、
 任意の図書館集計、将来データ用の`additionalContext`を含みます。
-モデル・location・system instructionはFunctions側が管理します。
+providerの選択、provider固有のモデル・location・system instructionはFunctions側が管理します。
 ブラウザは`{ "input": ReportSummaryInput }`だけを送信します。
 LLM要約の対象は各期間最大30日です。サーバーは日別の作業内容・メモを各4000文字、
 図書館名・IDを各200文字までに制限し、Geminiの出力を`maxOutputTokens=2048`に制限します。
 上限を超える入力は要約APIが拒否し、画面では要約なしのPDF生成を選べます。
 
-Phase 1のAPIレスポンスはwrapperなしの次の構造です（既存のフロントエンドparserは
+Phase 2でもAPIレスポンスはPhase 1と同じwrapperなしの次の構造です（既存のフロントエンドparserは
 `summary` wrapperも引き続き読み取れます）。
 
 ```json
@@ -417,26 +417,37 @@ Phase 1のAPIレスポンスはwrapperなしの次の構造です（既存のフ
 
 未設定・タイムアウト・不正レスポンス時は画面で通知し、要約なし（原文連結）で
 PDF生成を続けます。APIキーを`VITE_`環境変数へ置くとブラウザへ公開されるため、
-Phase 1ではAPIキーを使用せず、Functions実行サービスアカウントのADCでVertex AIを呼び出します。
+VertexGeminiProviderはAPIキーを使用せず、Functions実行サービスアカウントのADCでVertex AIを呼び出します。
 
-### 13-1. Phase 1の構成とAPI契約
+### 13-1. Phase 2のprovider abstractionとAPI契約
 
 `ExportPage → HttpReportSummarizer → POST /api/report-summary → Hosting rewrite →
-reportSummary (Functions v2 / Node.js 22) → Firebase ID token検証 → Vertex AI Gemini →
+reportSummary (Functions v2 / Node.js 22) → Firebase ID token検証・入力検証 →
+ReportSummaryProvider（factoryで選択） → VertexGeminiProvider → Vertex AI Gemini →
 検証済みReportSummary → 既存PDF`の経路です。Functionは`asia-northeast1`です。
 既存リポジトリにはリソースのリージョン指定がないため東京を採用しています。
 Hosting rewriteはSPA用の`** → /index.html`より先に評価されます。
 
 - `Authorization: Bearer <user.getIdToken()の結果>`が必須。HTTP基盤は`invoker: public`で受付け、Firebase Admin SDKの`verifyIdToken()`でアプリ利用者を検証します。Cloud Run用のID tokenとは異なります。
-- bodyは`{ "input": ReportSummaryInput }`だけです。未知のキー（model、instructions、project、uid等）はネストしたデータも含め拒否します。
-- `additionalContext`はPhase 1では空objectのみです。将来の追加時に目的別の型とvalidatorを拡張します。
-- Geminiへ送るのは検証済みの対象・比較期間、入力済み数値・差分、日別の作業・メモ・図書館名、任意の図書館集計のみです。認証UID、メールアドレス、tokenを追加しません。自由記述自体は要約対象として送信します。
-- `application/json`と`responseJsonSchema`を指定します。上記の全フィールドが必須、追加プロパティは禁止です。返却文字列はJSON parse後に再検証し、dailyは作業日（`stayMinutes !== null`）と完全一致させます。日付の重複・欠落・期間外・非作業日は拒否します。
-- エラーは`{ "error": "固定メッセージ" }`。400=不正入力、401=認証なし/失敗、405=POST以外（`Allow: POST`）、500=サーバー設定不足、502=Vertex AI失敗/不正出力。入力・token・モデル出力・providerエラー全文はログやエラーレスポンスへ出しません。
+- bodyは`{ "input": ReportSummaryInput }`だけです。未知のキー（provider、model、instructions、project、uid等）はネストしたデータも含め拒否します。
+- `additionalContext`はPhase 2でも空objectのみです。将来の追加時に目的別の型とvalidatorを拡張します。
+- providerへ渡すのは検証済みの対象・比較期間、入力済み数値・差分、日別の作業・メモ・図書館名、任意の図書館集計のみです。認証UID、メールアドレス、tokenを追加しません。自由記述自体は要約対象として送信します。
+- VertexGeminiProviderは`application/json`と`responseJsonSchema`を指定します。上記の全フィールドが必須、追加プロパティは禁止です。どのproviderの返却文字列もhandlerでJSON parse後に再検証し、dailyは作業日（`stayMinutes !== null`）と完全一致させます。日付の重複・欠落・期間外・非作業日は拒否します。
+- エラーは`{ "error": "固定メッセージ" }`。400=不正入力、401=認証なし/失敗、405=POST以外（`Allow: POST`）、500=サーバー設定不備（未知providerを含む）、502=provider失敗/不正出力。入力・token・モデル出力・providerエラー全文はログやエラーレスポンスへ出しません。
 - 失敗時は既存ダイアログから要約なしでPDF生成を続行できます。集計は従来どおり決定的なアプリ処理です。
 
-実装は`functions/src/index.ts`（v2登録・設定・Admin認証）、`reportSummary.ts`
-（HTTP契約・入出力検証）、`gemini.ts`（Vertex専用adapter）の3ファイルです。
+Functions側の責務は次のように分離しています。
+
+- `functions/src/index.ts`: v2登録・Admin認証・providerのdependency injection。
+- `functions/src/reportSummary.ts`: HTTP契約・認証・入出力検証・エラー変換。provider固有の設定やSDKには依存しません。
+- `functions/src/reportSummaryProvider.ts`: `ReportSummaryProvider`と共通の`ServerConfigurationError`。`generate(input)`は未検証のJSON文字列を返し、handlerが検証します。
+- `functions/src/reportSummaryProviderFactory.ts`: provider名から実装を生成。現在は`vertex-gemini`のみ対応します。
+- `functions/src/reportSummaryProviderConfiguration.ts`: server-side parameterの定義・実行時の解決。認証・入力検証を通過した後にfactoryを呼びます。
+- `functions/src/vertexGeminiProvider.ts`: Vertex専用設定型と`VertexGeminiProvider`。Gemini SDK・ADC・prompt・JSON schema・生成オプションを隔離します。
+
+モデル等はprovider共通設定へ統合せず、factoryへ渡す`vertexGemini`専用の設定resolverにまとめます。
+Phase 3でLocal LLMを追加する場合は`ReportSummaryProvider`を実装し、そのprovider固有の
+server-side設定とfactoryの分岐を追加します。HTTP契約・共通検証・レポートUIはそのまま利用できます。
 既存`src/report/types.ts`をtype-onlyで参照し、型を重複定義しません。
 このためコンパイル出力のentryは`functions/lib/functions/src/index.js`です。
 deployにはpredeployで生成したJSを同梱し、`gcp-build`は空にしてCloud Buildでの再コンパイルを省きます。
@@ -465,17 +476,20 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 [実行アカウントの仕様](https://firebase.google.com/docs/functions/version-comparison)、
 [Vertex AIの権限](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/access-control)を参照してください。
 
-モデルとVertexのlocationはFirebaseの`defineString()`によるparameterized configurationです。
-既定値は`functions/src/index.ts`の1箇所で定義しています。
+providerの選択と、Vertex Gemini専用のモデル・locationはFirebaseの`defineString()`による
+parameterized configurationです。既定値は`functions/src/reportSummaryProviderConfiguration.ts`で定義しています。
+`REPORT_SUMMARIZER_PROVIDER`の既定は`vertex-gemini`で、未設定なら従来どおりVertex AI Geminiを使用します。
+未知のprovider名はサーバー設定エラー（500）になります。
 2026-09-24時点の既定はGA版`gemini-3.5-flash`、`VERTEX_LOCATION=global`です。
 このモデルの東京リージョンはSingle Zone Provisioned Throughput向けのため、
-Phase 1は従量課金に対応するglobalを利用します。Functionの東京配置はVertexの
+既存実装と同じglobalを利用します。Functionの東京配置はVertexの
 処理場所を東京へ限定するものではありません。
 [モデル・対応ロケーション](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-5-flash)を確認してください。
 
 上書きする場合は`functions/.env.<project-id>`（Git管理対象外）に設定します。
 
 ```dotenv
+REPORT_SUMMARIZER_PROVIDER=vertex-gemini
 GEMINI_MODEL=gemini-3.5-flash
 VERTEX_LOCATION=global
 ```
@@ -488,7 +502,8 @@ project IDは`GCLOUD_PROJECT`、`GOOGLE_CLOUD_PROJECT`、Admin SDKのruntime pro
 
 ### 13-3. ローカル確認
 
-単体テストは認証とGeminiをmockし、実Vertex AIへ通信しません。
+単体テストはhandlerへfake providerを注入し、VertexGeminiProviderのテストではSDKをmockします。
+factoryの選択・設定エラーと共通検証も確認し、実Vertex AIへ通信しません。
 
 ```bash
 npm --prefix functions test
@@ -511,7 +526,7 @@ Service Usage Consumer (`roles/serviceusage.serviceUsageConsumer`)です。
 
 `.env.local`の`VITE_FIREBASE_PROJECT_ID`を上記と同じ実プロジェクトにし、
 `VITE_USE_FIREBASE_EMULATORS=true`、`VITE_REPORT_SUMMARIZER_ENDPOINT=/api/report-summary`を設定します。
-必要なら`functions/.env.local`でモデル・locationを上書きできます。
+必要なら`functions/.env.local`でproviderと、そのprovider固有の設定（現在はモデル・location）を上書きできます。
 
 ```bash
 npm --prefix functions run build
@@ -561,7 +576,7 @@ firebase deploy --only functions:reportSummary,hosting --project <project-id>
 Functionsはpredeployでもビルドされます。HTTP基盤のpublic invocationを禁止する
 組織ポリシーがある場合は管理者の調整が必要です。アプリ側のFirebase認証は常に必須です。
 この変更にFirestore schema/Rulesの変更はありません。
-Phase 2以降の他プロバイダ・ローカルLLM対応は未実装です。モデル選択UI、要約保存、
+Phase 2ではprovider abstractionのみを追加し、他プロバイダ・ローカルLLMは未実装です。モデル選択UI、要約保存、
 ストリーミング、cache、queue、RAG等も追加していません。
 
 ## 開発コマンド

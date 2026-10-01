@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createReportSummaryInput } from "../../src/report/summarizer";
 import { calculateReportPeriods, createReportData } from "../../src/utils/report";
-import { generateGeminiSummary, REPORT_SUMMARY_SCHEMA } from "../src/gemini";
-import { ServerConfigurationError } from "../src/reportSummary";
+import { REPORT_SUMMARY_SCHEMA, VertexGeminiProvider } from "../src/vertexGeminiProvider";
+import { ServerConfigurationError } from "../src/reportSummaryProvider";
 
 const mocks = vi.hoisted(() => ({ constructor: vi.fn(), generateContent: vi.fn() }));
 vi.mock("@google/genai", () => ({
@@ -12,14 +12,14 @@ vi.mock("@google/genai", () => ({
   },
 }));
 
-describe("Gemini Vertex AI adapter", () => {
+describe("VertexGeminiProvider", () => {
   const input = createReportSummaryInput(createReportData([], calculateReportPeriods("2026-09-07", 7)!, new Map()), false);
   const config = { project: "runtime-project", location: "global", model: "configured-model" };
   beforeEach(() => vi.resetAllMocks());
 
   it("uses Vertex ADC, server config and strict JSON schema; sends only report input", async () => {
     mocks.generateContent.mockResolvedValue({ text: "generated JSON" });
-    expect(await generateGeminiSummary(input, config)).toBe("generated JSON");
+    expect(await new VertexGeminiProvider(config).generate(input)).toBe("generated JSON");
     expect(mocks.constructor).toHaveBeenCalledWith({
       vertexai: true, project: config.project, location: config.location,
       httpOptions: { timeout: 25_000 },
@@ -40,11 +40,11 @@ describe("Gemini Vertex AI adapter", () => {
     expect(REPORT_SUMMARY_SCHEMA.properties.daily.items.additionalProperties).toBe(false);
   });
   it.each([{ project: undefined }, { project: " " }, { model: "" }, { location: "" }])("fails clearly on missing configuration", async (missing) => {
-    await expect(generateGeminiSummary(input, { ...config, ...missing })).rejects.toBeInstanceOf(ServerConfigurationError);
+    await expect(new VertexGeminiProvider({ ...config, ...missing }).generate(input)).rejects.toBeInstanceOf(ServerConfigurationError);
     expect(mocks.constructor).not.toHaveBeenCalled();
   });
   it("propagates provider failures to the HTTP boundary", async () => {
     mocks.generateContent.mockRejectedValue(new Error("upstream failure"));
-    await expect(generateGeminiSummary(input, config)).rejects.toThrow("upstream failure");
+    await expect(new VertexGeminiProvider(config).generate(input)).rejects.toThrow("upstream failure");
   });
 });

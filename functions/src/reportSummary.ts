@@ -1,5 +1,6 @@
 import type { Request } from "firebase-functions/v2/https";
 import type { Response } from "express";
+import { ServerConfigurationError, type ReportSummaryProvider } from "./reportSummaryProvider";
 import type {
   PeriodMetrics,
   ReportComparisons,
@@ -95,7 +96,7 @@ const inputShape = shape({
     libraryName: boundedString(MAX_LIBRARY_NAME_LENGTH),
     ...metrics,
   }), MAX_LIBRARIES),
-  // Phase 1 has no additional data sources. Add explicit validated fields when
+  // No additional data sources are supported yet. Add explicit validated fields when
   // a future integration is introduced; do not forward arbitrary JSON.
   additionalContext: shape({}),
 } satisfies Record<keyof ReportSummaryInput, Check>);
@@ -129,11 +130,9 @@ export function parseModelSummary(text: string | undefined, input: ReportSummary
   return summary;
 }
 
-export class ServerConfigurationError extends Error {}
-
 interface Dependencies {
   verifyIdToken(token: string): Promise<unknown>;
-  generate(input: ReportSummaryInput): Promise<string | undefined>;
+  getProvider(): ReportSummaryProvider;
   logError(message: string): void;
 }
 
@@ -170,7 +169,7 @@ export function createReportSummaryHandler(dependencies: Dependencies) {
       return;
     }
     try {
-      const result = await dependencies.generate(input);
+      const result = await dependencies.getProvider().generate(input);
       response.status(200).json(parseModelSummary(result, input));
     } catch (error) {
       if (error instanceof ServerConfigurationError) {
