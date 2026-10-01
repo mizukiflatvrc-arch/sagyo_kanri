@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { calculateReportPeriods, createReportData } from "../utils/report";
 import type { ReportSessionRecord } from "./types";
 import {
   createReportSummaryInput,
+  HttpReportSummarizer,
   parseReportSummary,
 } from "./summarizer";
 
@@ -52,6 +53,41 @@ describe("createReportSummaryInput", () => {
       new Map([["central", "中央図書館"]]),
     );
     expect(createReportSummaryInput(report, false).libraries).toEqual([]);
+  });
+});
+
+describe("HttpReportSummarizer", () => {
+  const input = createReportSummaryInput(createReportData(
+    [], calculateReportPeriods("2026-09-07", 7)!, new Map(),
+  ), false);
+  const summary = { daily: [], workSummary: "作業なし", noteSummary: "", overview: "記録なし" };
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("Bearer認証でinputのみをPOSTし、正常レスポンスをparseする", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(summary)));
+    vi.stubGlobal("fetch", fetchMock);
+    const adapter = new HttpReportSummarizer({ endpoint: "/api/report-summary", accessToken: "id-token" });
+    expect(await adapter.summarize(input)).toEqual(summary);
+    expect(fetchMock).toHaveBeenCalledWith("/api/report-summary", expect.objectContaining({
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer id-token" },
+      body: JSON.stringify({ input }),
+      credentials: "same-origin",
+    }));
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body);
+    expect(Object.keys(body)).toEqual(["input"]);
+    expect(body).not.toHaveProperty("model");
+    expect(body).not.toHaveProperty("instructions");
+  });
+
+  it.each([{}, { ...summary, daily: [{ date: "2026-09-06" }] }])("不正レスポンスを拒否する", async (value) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(value))));
+    await expect(new HttpReportSummarizer({ endpoint: "/api/report-summary" }).summarize(input)).rejects.toThrow("形式");
+  });
+
+  it("HTTPエラーを拒否する", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 502 })));
+    await expect(new HttpReportSummarizer({ endpoint: "/api/report-summary" }).summarize(input)).rejects.toThrow("502");
   });
 });
 

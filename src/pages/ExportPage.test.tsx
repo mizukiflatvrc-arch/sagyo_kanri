@@ -70,11 +70,14 @@ async function click(container: HTMLElement, text: string) {
 }
 
 async function generateWithoutLlm(container: HTMLElement) {
+  await click(container, "PDF生成へ");
+  await click(container, "この内容で生成");
+}
+
+function enableLlm(container: HTMLElement) {
   const llm = container.querySelector<HTMLInputElement>("#report-llm-summary");
   if (!llm) throw new Error("LLM switch not found");
   act(() => llm.click());
-  await click(container, "PDF生成へ");
-  await click(container, "この内容で生成");
 }
 
 describe("ExportPage", () => {
@@ -84,6 +87,7 @@ describe("ExportPage", () => {
   let originalCreateObjectUrl: typeof URL.createObjectURL | undefined;
 
   beforeEach(() => {
+    vi.stubEnv("VITE_REPORT_SUMMARIZER_ENDPOINT", "");
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-07T13:36:00.000Z"));
     Object.values(mocks).forEach((mock) => mock.mockReset());
@@ -116,6 +120,8 @@ describe("ExportPage", () => {
     if (originalCreateObjectUrl) URL.createObjectURL = originalCreateObjectUrl;
     vi.useRealTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it("診察向けの既定値を設定し、生成前に対象と比較期間を確認する", async () => {
@@ -126,7 +132,8 @@ describe("ExportPage", () => {
     expect(container.querySelector<HTMLSelectElement>("#report-orientation")?.value)
       .toBe("landscape");
     expect(container.querySelector<HTMLInputElement>("#report-llm-summary")?.checked)
-      .toBe(true);
+      .toBe(false);
+    expect(container.textContent).toContain("作業内容、メモ、状態データがGoogle Cloud Vertex AIへ送信されます");
     expect(container.querySelector<HTMLInputElement>("#report-library-comparison")?.checked)
       .toBe(false);
     expect(container.querySelector<HTMLInputElement>("#report-pdf-preview")?.checked)
@@ -143,6 +150,9 @@ describe("ExportPage", () => {
   });
 
   it("LLM OFFでは一度も要約を呼ばず、直接PDFを生成してMarkdownも維持する", async () => {
+    vi.stubEnv("VITE_REPORT_SUMMARIZER_ENDPOINT", "/api/report-summary");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
     await generateWithoutLlm(container);
 
     expect(mocks.getSessionsForReport).toHaveBeenCalledOnce();
@@ -150,6 +160,7 @@ describe("ExportPage", () => {
     expect(start.toISOString()).toBe("2026-08-24T15:00:00.000Z");
     expect(endExclusive.toISOString()).toBe("2026-09-07T15:00:00.000Z");
     expect(mocks.getIdToken).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(mocks.createReportPdfBlob).toHaveBeenCalledOnce();
     expect(mocks.createReportPdfBlob.mock.calls[0]?.[1]).toMatchObject({
       orientation: "landscape",
@@ -173,6 +184,7 @@ describe("ExportPage", () => {
   });
 
   it("LLM未設定時はダイアログ通知後、要約なしで生成を続ける", async () => {
+    enableLlm(container);
     await click(container, "PDF生成へ");
     await click(container, "この内容で生成");
 
@@ -188,10 +200,38 @@ describe("ExportPage", () => {
     expect(mocks.downloadPdfBlob).toHaveBeenCalledOnce();
   });
 
+  it("認証付きHTTP要約の結果を既存PDFへ渡す", async () => {
+    vi.stubEnv("VITE_REPORT_SUMMARIZER_ENDPOINT", "/api/report-summary");
+    const summary = {
+      daily: [{ date: "2026-09-06", workSummary: "実装を進めた。", noteSummary: "安定していた。" }],
+      workSummary: "レポート実装", noteSummary: "状態の記録", overview: "期間の振り返り",
+    };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(summary)));
+    vi.stubGlobal("fetch", fetchMock);
+    enableLlm(container);
+    await click(container, "PDF生成へ");
+    await click(container, "この内容で生成");
+    expect(mocks.getIdToken).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith("/api/report-summary", expect.objectContaining({
+      headers: { "Content-Type": "application/json", Authorization: "Bearer token" },
+    }));
+    expect(mocks.createReportPdfBlob.mock.calls[0]?.[1]).toMatchObject({ summary });
+    expect(mocks.downloadPdfBlob).toHaveBeenCalledOnce();
+  });
+
+  it("要約API失敗後も要約なしでPDF生成を続行できる", async () => {
+    vi.stubEnv("VITE_REPORT_SUMMARIZER_ENDPOINT", "/api/report-summary");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 502 })));
+    enableLlm(container);
+    await click(container, "PDF生成へ");
+    await click(container, "この内容で生成");
+    expect(container.textContent).toContain("LLM要約の生成に失敗しました");
+    expect(mocks.createReportPdfBlob).not.toHaveBeenCalled();
+    await click(container, "要約なしで続ける");
+    expect(mocks.createReportPdfBlob.mock.calls[0]?.[1]).toMatchObject({ summary: null });
+  });
+
   it("プレビューONでは完成PDFを埋め込み、保存操作まで自動ダウンロードしない", async () => {
-    act(() =>
-      container.querySelector<HTMLInputElement>("#report-llm-summary")?.click(),
-    );
     act(() =>
       container.querySelector<HTMLInputElement>("#report-pdf-preview")?.click(),
     );

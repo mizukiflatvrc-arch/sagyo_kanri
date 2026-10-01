@@ -107,7 +107,7 @@ export function ExportPage() {
     useState<ReportOrientation>("landscape");
   const [includeLibraryComparison, setIncludeLibraryComparison] =
     useState(false);
-  const [includeLlmSummary, setIncludeLlmSummary] = useState(true);
+  const [includeLlmSummary, setIncludeLlmSummary] = useState(false);
   const [previewPdf, setPreviewPdf] = useState(false);
   const [dateError, setDateError] = useState("");
   const [fetchError, setFetchError] = useState("");
@@ -434,16 +434,21 @@ export function ExportPage() {
 
           <fieldset className="report-options">
             <legend>PDFに含める内容</legend>
-            <ReportOptionSwitch
-              id="report-llm-summary"
-              label="LLM要約"
-              checked={includeLlmSummary}
-              disabled={isLoading}
-              onChange={(checked) => {
-                setIncludeLlmSummary(checked);
-                clearPdfOutput();
-              }}
-            />
+            <div className="report-option-with-hint">
+              <ReportOptionSwitch
+                id="report-llm-summary"
+                label="LLM要約"
+                checked={includeLlmSummary}
+                disabled={isLoading}
+                onChange={(checked) => {
+                  setIncludeLlmSummary(checked);
+                  clearPdfOutput();
+                }}
+              />
+              <p className="field-hint">
+                LLM要約を有効にすると、対象・比較期間の作業内容、メモ、状態データがGoogle Cloud Vertex AIへ送信されます。
+              </p>
+            </div>
             <ReportOptionSwitch
               id="report-library-comparison"
               label="図書館ごとの比較を含める"

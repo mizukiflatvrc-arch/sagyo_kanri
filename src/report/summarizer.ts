@@ -11,15 +11,6 @@ export interface ReportSummarizer {
   summarize(input: ReportSummaryInput): Promise<ReportSummary>;
 }
 
-const SUMMARY_INSTRUCTIONS = [
-  "対象期間と直前の同日数期間を比較し、通院時に読みやすい簡潔な日本語で要約してください。",
-  "dailyは対象期間の作業日のみを日付ごとにまとめ、workSummaryとnoteSummaryはそれぞれ1〜2文にしてください。",
-  "期間全体のworkSummary、noteSummary、overviewを返してください。",
-  "数値は入力値のみを使用し、再計算や推測をしないでください。",
-  "傾向や関連性は記述できますが、因果関係、医療診断、医学的評価を断定しないでください。",
-  "出力は指定された構造のJSONだけにしてください。",
-].join("\n");
-
 function dayInput(day: DailyReportData): ReportSummaryDayInput {
   return {
     date: day.date,
@@ -105,7 +96,6 @@ export function parseReportSummary(value: unknown): ReportSummary {
 
 interface HttpReportSummarizerOptions {
   endpoint: string;
-  model?: string;
   accessToken?: string;
   timeoutMilliseconds?: number;
 }
@@ -135,16 +125,10 @@ export class HttpReportSummarizer implements ReportSummarizer {
       if (this.#options.accessToken) {
         headers.Authorization = `Bearer ${this.#options.accessToken}`;
       }
-      const body: Record<string, unknown> = {
-        instructions: SUMMARY_INSTRUCTIONS,
-        input,
-      };
-      if (this.#options.model) body.model = this.#options.model;
-
       const response = await fetch(this.#options.endpoint, {
         method: "POST",
         headers,
-        body: JSON.stringify(body),
+        body: JSON.stringify({ input }),
         credentials: "same-origin",
         signal: controller.signal,
       });
@@ -163,10 +147,8 @@ export function createConfiguredReportSummarizer(
 ): ReportSummarizer | null {
   const endpoint = import.meta.env.VITE_REPORT_SUMMARIZER_ENDPOINT?.trim();
   if (!endpoint) return null;
-  const model = import.meta.env.VITE_REPORT_SUMMARIZER_MODEL?.trim();
   return new HttpReportSummarizer({
     endpoint,
-    ...(model ? { model } : {}),
     ...(accessToken ? { accessToken } : {}),
   });
 }

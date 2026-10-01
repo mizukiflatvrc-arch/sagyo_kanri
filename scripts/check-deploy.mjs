@@ -9,6 +9,7 @@ const requiredEnvironmentKeys = [
   "VITE_FIREBASE_STORAGE_BUCKET",
   "VITE_FIREBASE_MESSAGING_SENDER_ID",
   "VITE_FIREBASE_APP_ID",
+  "VITE_REPORT_SUMMARIZER_ENDPOINT",
 ];
 
 function readEnvironmentFile() {
